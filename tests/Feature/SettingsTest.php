@@ -59,7 +59,7 @@ class SettingsTest extends TestCase
         Http::assertSent(fn (Request $r) => $r->hasHeader('X-Api-Key', self::KEY));
     }
 
-    public function test_voice_sync_selects_existing_kikitoons_voice_once_and_never_creates_voices(): void
+    public function test_voice_sync_selects_existing_soundex_once_and_never_creates_voices(): void
     {
         app(SettingsService::class)->setApiKey(self::KEY);
         Http::fake(['heygen.test/v3/models/audio/voices*' => Http::response(['data' => [

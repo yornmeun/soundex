@@ -15,9 +15,9 @@ class UpdateGeneralSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'model' => ['required', Rule::in(array_keys(config('kikitoons.models')))],
-            'mp3_bitrate' => ['required', 'integer', Rule::in(config('kikitoons.mp3_bitrates'))],
-            'chunk_max_chars' => ['required', 'integer', 'between:500,'.config('kikitoons.heygen.max_chars_per_request')],
+            'model' => ['required', Rule::in(array_keys(config('soundex.models')))],
+            'mp3_bitrate' => ['required', 'integer', Rule::in(config('soundex.mp3_bitrates'))],
+            'chunk_max_chars' => ['required', 'integer', 'between:500,'.config('soundex.heygen.max_chars_per_request')],
             'silence_between_ms' => ['required', 'integer', 'between:0,5000'],
             'normalize_loudness' => ['nullable', 'boolean'],
             'trim_chunk_silence' => ['nullable', 'boolean'],

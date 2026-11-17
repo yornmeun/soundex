@@ -11,6 +11,16 @@
             <option value="{{ $status->value }}" @selected($filters['status'] === $status->value)>{{ $status->label() }}</option>
         @endforeach
     </select>
+    @isset($folders)
+        <label for="folder-filter" class="sr-only">Folder</label>
+        <select id="folder-filter" name="folder" class="input sm:w-44" onchange="this.form.submit()">
+            <option value="">All folders</option>
+            <option value="none" @selected(($filters['folder'] ?? null) === 'none')>Unfiled</option>
+            @foreach ($folders as $folder)
+                <option value="{{ $folder->id }}" @selected((string) ($filters['folder'] ?? '') === (string) $folder->id)>{{ $folder->name }}</option>
+            @endforeach
+        </select>
+    @endisset
     <label for="sort" class="sr-only">Sort</label>
     <select id="sort" name="sort" class="input sm:w-36" onchange="this.form.submit()">
         <option value="newest" @selected($filters['sort'] === 'newest')>Newest first</option>

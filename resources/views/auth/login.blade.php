@@ -8,7 +8,7 @@
                 <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white shadow-xl shadow-brand-900/50">
                     <x-icon name="wave" class="h-7 w-7" />
                 </div>
-                <h1 class="text-2xl font-bold tracking-tight text-white">Kikitoons Voice Generator</h1>
+                <h1 class="text-2xl font-bold tracking-tight text-white">Soundex</h1>
                 <p class="mt-1 text-sm text-slate-400">Turn subtitles into narration with your own voice.</p>
             </div>
 
@@ -28,7 +28,7 @@
                 </label>
                 <button class="btn-primary w-full">Sign in</button>
             </form>
-            <p class="mt-6 text-center text-xs text-slate-500">Create an account with <code class="text-slate-400">php artisan kikitoons:user you@example.com</code></p>
+            <p class="mt-6 text-center text-xs text-slate-500">Create an account with <code class="text-slate-400">php artisan soundex:user you@example.com</code></p>
         </div>
     </div>
 </x-layouts.guest>

@@ -20,6 +20,7 @@ It is never logged, never rendered in HTML or JavaScript, and only displayed mas
 | Download audio | `GET <audio_url>` | Pre-signed URL. The API key is **not** sent. Saved to `storage/app/private/generations/{id}/chunks/NNNN.mp3`. |
 
 The app never calls `POST /v3/models/audio/voices`, so it cannot create, clone or design voices.
+Re-mixing music and sound effects, SRT exports, folders and batch bookkeeping never call HeyGen.
 
 ## TTS request body
 
@@ -41,7 +42,20 @@ The app never calls `POST /v3/models/audio/voices`, so it cannot create, clone o
 | `speed` | Professional clones only | 0.75–1.25. HeyGen ignores it for instant clones, so the UI hides it. |
 | `model` | Always | `heygen-voice-1`, `heygen-voice-1-turbo`, `heygen-voice-1-turbo-free`. Professional clones only work with `heygen-voice-1` (the UI blocks other combinations). |
 
+| `pronunciation_dictionary` | Terms from your dictionary that occur in the chunk | Object of term → IPA (`"/ˈkiːki/"`). Up to 100 entries, keys 1–128 characters, values 3–512 characters, case-insensitive whole-term matching, at most 100 occurrences per request. Applies to instant voices on `heygen-voice-1` and `heygen-voice-1-turbo` only, so it is omitted for professional clones and Turbo Free. |
+| `with_timestamps` | Always `true` | Adds `data.original_words[] {text, start_time, end_time}`, stored per chunk and used for narration-timed SRT export. |
+
 Unknown fields are rejected by HeyGen (`additionalProperties: false`), so no other fields are sent.
+
+### Character voices
+
+Each chunk carries its own voice: chunks are split at speaker turns, so one request never mixes two voices.
+The per-chunk `voice_id` comes from the character mapping, or falls back to the generation's main voice.
+`speed` is sent only for chunks whose voice is a professional clone.
+
+### Free-model fallback
+
+When a request fails with `402 insufficient_credit` and the chunk's voice is an instant clone, the processor retries once on `heygen-voice-1-turbo-free` (`HEYGEN_FREE_MODEL_FALLBACK`, default `true`). Pronunciations are not sent on that model.
 
 ## Long text
 

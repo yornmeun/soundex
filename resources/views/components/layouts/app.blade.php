@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ isset($title) ? $title.' · ' : '' }}Kikitoons Voice Generator</title>
+    <title>{{ isset($title) ? $title.' · ' : '' }}Soundex</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%237c3aed'/><path d='M9 16h2m3-5v10m3-13v16m3-11v6m3-3h0' stroke='white' stroke-width='2.4' stroke-linecap='round'/></svg>">
     @fonts
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -24,7 +24,7 @@
             <x-icon name="wave" class="h-5 w-5" />
         </div>
         <div class="leading-tight">
-            <p class="text-sm font-bold tracking-tight text-white">Kikitoons</p>
+            <p class="text-sm font-bold tracking-tight text-white">Soundex</p>
             <p class="text-xs text-slate-400">Voice Generator</p>
         </div>
         <button class="ml-auto text-slate-400 hover:text-white lg:hidden" @click="sidebar = false" aria-label="Close menu"><x-icon name="x" /></button>
@@ -33,11 +33,15 @@
     <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
         <x-nav-link :href="route('dashboard')" icon="home" :active="request()->routeIs('dashboard')">Dashboard</x-nav-link>
         <x-nav-link :href="route('generations.create')" icon="plus" :active="request()->routeIs('generations.create')">New Generation</x-nav-link>
+        <x-nav-link :href="route('batches.create')" icon="stack" :active="request()->routeIs('batches.*')">Batch Generation</x-nav-link>
         <x-nav-link :href="route('library')" icon="library" :active="request()->routeIs('library')">My Audio Library</x-nav-link>
+        <x-nav-link :href="route('folders.index')" icon="folder" :active="request()->routeIs('folders.*')">Project Folders</x-nav-link>
         <x-nav-link :href="route('history')" icon="clock" :active="request()->routeIs('history', 'generations.show')">Generation History</x-nav-link>
+        <x-nav-link :href="route('sounds.index')" icon="music" :active="request()->routeIs('sounds.*')">Sound Library</x-nav-link>
 
         <p class="px-3 pb-1 pt-6 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Settings</p>
         <x-nav-link :href="route('settings.voices')" icon="mic" :active="request()->routeIs('settings.voices*')">Voice Settings</x-nav-link>
+        <x-nav-link :href="route('pronunciations.index')" icon="speech" :active="request()->routeIs('pronunciations.*')">Pronunciation</x-nav-link>
         <x-nav-link :href="route('settings.api')" icon="key" :active="request()->routeIs('settings.api*')">API Settings</x-nav-link>
         <x-nav-link :href="route('settings.general')" icon="cog" :active="request()->routeIs('settings.general*')">General Settings</x-nav-link>
     </nav>

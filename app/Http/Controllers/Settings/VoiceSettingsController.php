@@ -23,7 +23,7 @@ class VoiceSettingsController extends Controller
             'defaultVoice' => $this->voices->defaultVoice(),
             'defaultVoiceIdSet' => filled($settings->defaultVoiceId()),
             'hasApiKey' => filled($settings->apiKey()),
-            'targetName' => config('kikitoons.heygen.default_voice_name'),
+            'targetName' => config('soundex.heygen.default_voice_name'),
         ]);
     }
 
@@ -45,7 +45,7 @@ class VoiceSettingsController extends Controller
         if ($result['default_missing']) {
             $redirect->with('error', 'Your default voice is no longer active in HeyGen. It was NOT replaced automatically; please choose a voice.');
         } elseif ($result['total'] > 0 && ! $result['default_voice_name']) {
-            $redirect->with('warning', 'No voice named “'.config('kikitoons.heygen.default_voice_name').'” was found. Choose a default voice below, or add it by voice ID.');
+            $redirect->with('warning', 'No voice named “'.config('soundex.heygen.default_voice_name').'” was found. Choose a default voice below, or add it by voice ID.');
         }
 
         return $redirect;

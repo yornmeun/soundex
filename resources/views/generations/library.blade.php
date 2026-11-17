@@ -4,9 +4,9 @@
 
     @if ($generations->isEmpty())
         <div class="card">
-            <x-empty-state icon="library" title="{{ $filters['q'] || $filters['status'] ? 'No matching narrations' : 'Your library is empty' }}"
-                message="{{ $filters['q'] || $filters['status'] ? 'Try a different search or filter.' : 'Completed narrations appear here, ready to play and download.' }}">
-                @unless ($filters['q'] || $filters['status'])
+            <x-empty-state icon="library" title="{{ $filters['q'] || $filters['status'] || $filters['folder'] ? 'No matching narrations' : 'Your library is empty' }}"
+                message="{{ $filters['q'] || $filters['status'] || $filters['folder'] ? 'Try a different search or filter.' : 'Completed narrations appear here, ready to play and download.' }}">
+                @unless ($filters['q'] || $filters['status'] || $filters['folder'])
                     <a href="{{ route('generations.create') }}" class="btn-primary"><x-icon name="plus" class="h-4 w-4" /> New Generation</a>
                 @endunless
             </x-empty-state>
@@ -19,6 +19,9 @@
                         <div class="min-w-0">
                             <a href="{{ route('generations.show', $g) }}" class="block truncate font-semibold text-slate-900 hover:text-brand-700">{{ $g->project_name }}</a>
                             <p class="truncate text-xs text-slate-500">{{ $g->original_filename ?? 'No SRT' }} · {{ $g->voice_name }}</p>
+                            @if ($g->folder)
+                                <a href="{{ route('library', ['folder' => $g->folder_id]) }}" class="mt-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-brand-700"><span class="h-2 w-2 rounded-full {{ $g->folder->dotClass() }}"></span>{{ $g->folder->name }}</a>
+                            @endif
                         </div>
                         <x-status-badge :status="$g->status" />
                     </div>

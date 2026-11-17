@@ -9,7 +9,7 @@ use Illuminate\Console\Command;
 
 class RecoverStaleGenerations extends Command
 {
-    protected $signature = 'kikitoons:recover-stale {--minutes=75}';
+    protected $signature = 'soundex:recover-stale {--minutes=75}';
 
     protected $description = 'Mark generations stuck in "processing" (e.g. the worker was killed) as failed so they can be retried';
 

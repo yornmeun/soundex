@@ -20,13 +20,13 @@ class SettingsService
     /** Keys editable in General / API settings, with their config defaults. */
     public function defaults(): array
     {
-        $d = config('kikitoons.defaults');
+        $d = config('soundex.defaults');
 
         return [
             'generation.language' => $d['language'],
             'generation.output_format' => $d['output_format'],
             'generation.mp3_bitrate' => $d['mp3_bitrate'],
-            'generation.model' => config('kikitoons.heygen.default_model'),
+            'generation.model' => config('soundex.heygen.default_model'),
             'generation.chunk_max_chars' => $d['chunk_max_chars'],
             'generation.silence_between_ms' => $d['silence_between_ms'],
             'generation.normalize_loudness' => $d['normalize_loudness'],
@@ -85,7 +85,7 @@ class SettingsService
     {
         $stored = $this->get(self::API_KEY);
 
-        return filled($stored) ? (string) $stored : (config('kikitoons.heygen.api_key') ?: null);
+        return filled($stored) ? (string) $stored : (config('soundex.heygen.api_key') ?: null);
     }
 
     public function apiKeySource(): ?string
@@ -94,7 +94,7 @@ class SettingsService
             return 'database';
         }
 
-        return filled(config('kikitoons.heygen.api_key')) ? 'env' : null;
+        return filled(config('soundex.heygen.api_key')) ? 'env' : null;
     }
 
     public function maskedApiKey(): ?string
@@ -109,7 +109,7 @@ class SettingsService
 
     public function defaultVoiceId(): ?string
     {
-        return $this->get(self::DEFAULT_VOICE_ID) ?: (config('kikitoons.heygen.default_voice_id') ?: null);
+        return $this->get(self::DEFAULT_VOICE_ID) ?: (config('soundex.heygen.default_voice_id') ?: null);
     }
 
     public function setDefaultVoiceId(?string $voiceId): void

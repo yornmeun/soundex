@@ -42,7 +42,7 @@ class VoiceService
         $autoSelected = false;
         if (blank($this->settings->defaultVoiceId())) {
             // First-time setup only: pick the existing "kikitoons" voice if present.
-            $kikitoons = $this->findByName((string) config('kikitoons.heygen.default_voice_name'));
+            $kikitoons = $this->findByName((string) config('soundex.heygen.default_voice_name'));
             if ($kikitoons) {
                 $this->setDefault($kikitoons);
                 $autoSelected = true;

@@ -55,7 +55,7 @@ jobs, failed_jobs, job_batches, cache, sessions  (Laravel framework tables)
 | cues | json | `[{index, start_ms, end_ms, text}]`, used to build synchronized segments |
 | timestamps | | Index: (`user_id`, `created_at`) |
 
-Unused uploads older than 7 days are deleted by `kikitoons:prune-uploads` (daily).
+Unused uploads older than 7 days are deleted by `soundex:prune-uploads` (daily).
 
 ## `generations`
 
@@ -107,12 +107,65 @@ Unused uploads older than 7 days are deleted by `kikitoons:prune-uploads` (daily
 | error_message | text null | |
 | timestamps | | Index: (`generation_id`, `status`) |
 
+## `folders`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | bigint PK | |
+| user_id | FK → users, cascade | |
+| name | varchar(100) | Unique per user |
+| description | varchar(500) null | |
+| color | varchar | `violet`, `sky`, `emerald`, `amber`, `rose`, `slate` |
+
+Deleting a folder sets `generations.folder_id` to null; the narrations are kept.
+
+## `generation_batches`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | bigint PK | |
+| user_id | FK → users, cascade | |
+| folder_id | FK → folders, null on delete | |
+| name | varchar(150) | |
+| settings | json | Snapshot of the shared settings |
+| total_items | uint | |
+
+## `pronunciation_entries`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | bigint PK | |
+| user_id | FK → users, cascade | |
+| term | varchar(128) | Unique per user (also enforced case-insensitively) |
+| ipa | varchar(512) | IPA wrapped in slashes |
+| note | varchar null | |
+| is_active | bool | |
+
+## `audio_assets` (Sound Library)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | bigint PK | |
+| user_id | FK → users, cascade | |
+| type | varchar | `music` / `sfx` |
+| name, original_filename | varchar | |
+| path | varchar | `sounds/{user_id}/{uuid}.{ext}` |
+| mime_type, size_bytes, duration_seconds | | Duration measured with ffprobe |
+
+## Upgrade columns
+
+`generations`: `folder_id`, `batch_id`, `speaker_voices` (json: key → {label, voice_id, voice_name, voice_mode}), `strip_speaker_labels`, `use_pronunciations`, `pronunciation_dictionary` (json snapshot), `voice_audio_path` (narration without music), `mix_settings` (json: `{music: {asset_id, volume_db, duck, fade_in, fade_out}|null, sfx: [{asset_id, at_ms, volume_db}]}`), `mix_status`, `mix_error`.
+
+`generation_chunks`: `speaker`, `voice_id`/`voice_name`/`voice_mode` (null = the generation's voice), `words` (json: HeyGen word timestamps).
+
 ## Files on disk (`storage/app/private`)
 
 ```
 uploads/srt/{uuid}.srt
 generations/{id}/chunks/0000.mp3 …
-generations/{id}/narration.mp3          (continuous)
+generations/{id}/narration.mp3          (continuous, voice only)
+generations/{id}/final.mp3              (with music / sound effects)
+sounds/{user_id}/{uuid}.mp3             (Sound Library)
 generations/{id}/timeline.mp3           (segments)
 generations/{id}/segments.zip           (segments)
 ```

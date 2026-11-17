@@ -30,6 +30,21 @@ class User extends Authenticatable
         return $this->hasMany(Generation::class);
     }
 
+    public function folders(): HasMany
+    {
+        return $this->hasMany(Folder::class)->orderBy('name');
+    }
+
+    public function pronunciationEntries(): HasMany
+    {
+        return $this->hasMany(PronunciationEntry::class)->orderBy('term');
+    }
+
+    public function audioAssets(): HasMany
+    {
+        return $this->hasMany(AudioAsset::class);
+    }
+
     public function uploadedFiles(): HasMany
     {
         return $this->hasMany(UploadedFile::class);

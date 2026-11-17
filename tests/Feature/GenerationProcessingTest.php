@@ -132,7 +132,7 @@ class GenerationProcessingTest extends TestCase
 
     public function test_free_model_fallback_can_be_disabled(): void
     {
-        config(['kikitoons.heygen.free_model_fallback' => false]);
+        config(['soundex.heygen.free_model_fallback' => false]);
         Http::fake(['heygen.test/*' => Http::response(['error' => ['code' => 'insufficient_credit', 'message' => 'No credits']], 402)]);
         $generation = $this->makeGeneration(attrs: ['script' => 'Short script.']);
 
@@ -144,7 +144,7 @@ class GenerationProcessingTest extends TestCase
 
     public function test_transient_errors_stop_after_max_attempts(): void
     {
-        config(['kikitoons.heygen.max_attempts' => 3]);
+        config(['soundex.heygen.max_attempts' => 3]);
         Http::fake(['heygen.test/*' => Http::response(['error' => ['code' => 'service_unavailable']], 503)]);
         $generation = $this->makeGeneration(attrs: ['script' => 'Short script.']);
 

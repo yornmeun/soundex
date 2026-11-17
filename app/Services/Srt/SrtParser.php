@@ -3,6 +3,7 @@
 namespace App\Services\Srt;
 
 use App\Exceptions\InvalidSrtException;
+use App\Services\Text\SpeakerParser;
 
 /**
  * Parses SubRip (.srt) subtitle files.
@@ -90,9 +91,16 @@ class SrtParser
         $script = '';
         $previous = null;
 
+        $speakers = new SpeakerParser;
+
         foreach ($cues as $cue) {
             if ($previous !== null) {
-                $script .= ($cue->startMs - $previous->endMs) >= $paragraphGapMs ? "\n\n" : ' ';
+                $script .= match (true) {
+                    ($cue->startMs - $previous->endMs) >= $paragraphGapMs => "\n\n",
+                    // Character lines ("Kiki: …") start on their own line so each can get its own voice.
+                    $speakers->detect($cue->text) !== null => "\n",
+                    default => ' ',
+                };
             }
             $script .= $cue->text;
             $previous = $cue;

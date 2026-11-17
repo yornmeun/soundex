@@ -8,7 +8,7 @@ use Illuminate\Console\Command;
 
 class SyncVoices extends Command
 {
-    protected $signature = 'kikitoons:sync-voices';
+    protected $signature = 'soundex:sync-voices';
 
     protected $description = 'Load the voices in your HeyGen workspace (never creates voices)';
 

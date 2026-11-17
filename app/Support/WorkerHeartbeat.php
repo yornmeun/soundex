@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Cache;
  */
 class WorkerHeartbeat
 {
-    private const KEY = 'kikitoons:worker-heartbeat';
+    private const KEY = 'soundex:worker-heartbeat';
 
     /** A worker that has not looped for this long is considered offline. */
     private const STALE_AFTER_SECONDS = 90;

@@ -2,6 +2,8 @@ import Alpine from 'alpinejs';
 import { generationWizard } from './wizard';
 import { generationStatus } from './status';
 import { waveformPlayer } from './player';
+import { batchForm, batchStatus } from './batch';
+import { mixEditor } from './mixer';
 import { api, formatDuration } from './helpers';
 
 window.api = api;
@@ -35,6 +37,9 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('generationWizard', generationWizard);
     Alpine.data('generationStatus', generationStatus);
     Alpine.data('waveformPlayer', waveformPlayer);
+    Alpine.data('batchForm', batchForm);
+    Alpine.data('batchStatus', batchStatus);
+    Alpine.data('mixEditor', mixEditor);
 });
 
 window.Alpine = Alpine;

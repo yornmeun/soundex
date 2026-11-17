@@ -1,8 +1,10 @@
 import { api, formatDuration } from './helpers';
+import { detectSpeakers, voiceExtras } from './speakers';
 
 /** Five-step "New Generation" wizard. */
 export function generationWizard(config) {
     return {
+        ...voiceExtras(config),
         step: 1,
         steps: ['Upload SRT', 'Review script', 'Configure voice', 'Generate', 'Preview & download'],
 
@@ -64,7 +66,29 @@ export function generationWizard(config) {
             if (this.turboWithProfessional) return 'Professional voice clones only work with the "HeyGen Voice 1" model.';
             return null;
         },
-        get turboWithProfessional() { return this.isProfessional && this.form.model !== 'heygen-voice-1'; },
+        get turboWithProfessional() { return this.anyProfessional(this.selectedVoice) && this.form.model !== 'heygen-voice-1'; },
+        get speakerSource() { return this.mode === 'segments' ? this.segments.map((s) => s.text).join('\n') : this.script; },
+        get speakers() { return detectSpeakers(this.speakerSource); },
+        get matchedTerms() { return this.matchingTerms(this.speakerSource); },
+        get pronunciationSupported() {
+            return this.form.model !== 'heygen-voice-1-turbo-free' && this.selectedVoice?.mode !== 'professional';
+        },
+
+        /** Download the edited script as an SRT on the original timings (no generation needed). */
+        async exportCorrectedSrt() {
+            if (!this.upload) return;
+            const res = await fetch(config.exportUrl.replace('__ID__', this.upload.id), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                body: JSON.stringify({ script: this.script }),
+                credentials: 'same-origin',
+            });
+            if (!res.ok) { Alpine.store('toasts').push('Could not export the SRT.', 'error'); return; }
+            const blob = await res.blob();
+            const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: this.upload.filename.replace(/\.srt$/i, '') + '-corrected.srt' });
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        },
         fmt(s) { return formatDuration(s); },
 
         // ---- Step 1: upload
@@ -148,8 +172,9 @@ export function generationWizard(config) {
                     script: this.mode === 'continuous' ? this.script : null,
                     segment_strategy: this.mode === 'segments' ? this.segmentStrategy : null,
                     segment_texts: this.mode === 'segments' ? this.segments.map((s) => s.text) : null,
-                    speed: this.isProfessional ? this.form.speed : null,
+                    speed: this.anyProfessional(this.selectedVoice) ? this.form.speed : null,
                     mp3_bitrate: this.form.output_format === 'mp3' ? this.form.mp3_bitrate : null,
+                    ...this.extrasPayload(this.speakers),
                 };
                 this.generation = await api(config.storeUrl, { method: 'POST', body });
                 this.step = 4;

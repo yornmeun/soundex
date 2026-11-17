@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Validator;
 
 class CreateUser extends Command
 {
-    protected $signature = 'kikitoons:user {email} {--name=Kikitoons Admin} {--password= : Omit to be prompted securely}';
+    protected $signature = 'soundex:user {email} {--name=Soundex Admin} {--password= : Omit to be prompted securely}';
 
     protected $description = 'Create (or reset the password of) a user who can sign in to the voice generator';
 

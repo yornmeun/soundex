@@ -14,12 +14,12 @@ class AudioProcessor
 
     public function ffmpeg(): string
     {
-        return $this->resolveBinary((string) config('kikitoons.ffmpeg.ffmpeg_binary'));
+        return $this->resolveBinary((string) config('soundex.ffmpeg.ffmpeg_binary'));
     }
 
     public function ffprobe(): string
     {
-        return $this->resolveBinary((string) config('kikitoons.ffmpeg.ffprobe_binary'));
+        return $this->resolveBinary((string) config('soundex.ffmpeg.ffprobe_binary'));
     }
 
     /**
@@ -130,6 +130,104 @@ class AudioProcessor
         $this->run(array_column($clips, 'path'), $filters, $output, $options);
     }
 
+    /**
+     * Mix background music and sound effects under the narration.
+     * The narration is never altered in timing; the output has the narration's length.
+     *
+     * @param  array{path:string,volume_db:float,duck:bool,fade_in:float,fade_out:float}|null  $music
+     * @param  list<array{path:string,at_ms:int,volume_db:float}>  $sfx
+     */
+    public function mix(string $voice, ?array $music, array $sfx, string $output, float $voiceDuration, array $options = []): void
+    {
+        $cmd = $this->buildMixCommand($voice, $music, $sfx, $output, $voiceDuration, $options);
+
+        foreach (array_filter([$voice, $music['path'] ?? null, ...array_column($sfx, 'path')]) as $input) {
+            if (! is_file($input)) {
+                throw new AudioProcessingException('Missing audio file: '.basename($input));
+            }
+        }
+        if (! is_dir(dirname($output))) {
+            mkdir(dirname($output), 0775, true);
+        }
+
+        $result = Process::timeout((int) config('soundex.ffmpeg.timeout'))->run($cmd);
+        if (! $result->successful() || ! is_file($output) || filesize($output) === 0) {
+            throw new AudioProcessingException('FFmpeg mixing failed: '.$this->tail($result->errorOutput()));
+        }
+    }
+
+    /** @return list<string> */
+    public function buildMixCommand(string $voice, ?array $music, array $sfx, string $output, float $voiceDuration, array $options = []): array
+    {
+        $fmt = 'aresample='.self::SAMPLE_RATE.',aformat=sample_fmts=fltp:channel_layouts=stereo';
+        $duration = max(0.1, round($voiceDuration, 3));
+
+        $cmd = [$this->ffmpeg(), '-hide_banner', '-loglevel', 'error', '-y', '-i', $voice];
+        $filters = [];
+        $mixInputs = [];
+        $index = 1;
+
+        $duck = $music !== null && ($music['duck'] ?? true);
+        $filters[] = "[0:a]{$fmt}".($duck ? ',asplit=2[voice][vkey]' : '[voice]');
+        $mixInputs[] = '[voice]';
+
+        if ($music !== null) {
+            // Loop the music for as long as the narration lasts.
+            array_push($cmd, '-stream_loop', '-1', '-i', $music['path']);
+            $fadeIn = max(0, (float) ($music['fade_in'] ?? 2));
+            $fadeOut = min(max(0, (float) ($music['fade_out'] ?? 3)), $duration);
+            $chain = "[{$index}:a]{$fmt},atrim=0:{$duration},asetpts=PTS-STARTPTS"
+                .',volume='.$this->db((float) ($music['volume_db'] ?? -18)).'dB'
+                .($fadeIn > 0 ? ",afade=t=in:st=0:d={$fadeIn}" : '')
+                .($fadeOut > 0 ? ',afade=t=out:st='.round($duration - $fadeOut, 3).":d={$fadeOut}" : '');
+            if ($duck) {
+                $filters[] = $chain.'[mraw]';
+                // Lower the music automatically while the voice is speaking.
+                $filters[] = '[mraw][vkey]sidechaincompress=threshold=0.02:ratio=10:attack=15:release=350[music]';
+            } else {
+                $filters[] = $chain.'[music]';
+            }
+            $mixInputs[] = '[music]';
+            $index++;
+        }
+
+        foreach ($sfx as $i => $effect) {
+            array_push($cmd, '-i', $effect['path']);
+            $delay = max(0, (int) $effect['at_ms']);
+            $filters[] = "[{$index}:a]{$fmt},volume=".$this->db((float) ($effect['volume_db'] ?? 0))."dB,adelay=delays={$delay}:all=1[sfx{$i}]";
+            $mixInputs[] = "[sfx{$i}]";
+            $index++;
+        }
+
+        $filters[] = implode('', $mixInputs).'amix=inputs='.count($mixInputs).':normalize=0:duration=first:dropout_transition=0,alimiter=limit=0.95[out]';
+
+        array_push($cmd, '-filter_complex', implode(';', $filters), '-map', '[out]', '-ar', (string) self::SAMPLE_RATE, '-ac', '2');
+        if (($options['format'] ?? 'mp3') === 'wav') {
+            array_push($cmd, '-c:a', 'pcm_s16le');
+        } else {
+            array_push($cmd, '-c:a', 'libmp3lame', '-b:a', ((int) (($options['bitrate'] ?? 128000) / 1000)).'k');
+        }
+        $cmd[] = $output;
+
+        return $cmd;
+    }
+
+    /** True when ffprobe finds an audio stream in the file. */
+    public function isAudioFile(string $path): bool
+    {
+        $result = Process::timeout(60)->run([
+            $this->ffprobe(), '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type',
+            '-of', 'default=noprint_wrappers=1:nokey=1', $path,
+        ]);
+
+        return $result->successful() && trim($result->output()) === 'audio';
+    }
+
+    private function db(float $value): string
+    {
+        return (string) round(max(-60, min(12, $value)), 1);
+    }
+
     /** Build the ffmpeg argument list (public for testing). */
     public function buildCommand(array $inputs, array $filters, string $output, array $options): array
     {
@@ -164,7 +262,7 @@ class AudioProcessor
             mkdir(dirname($output), 0775, true);
         }
 
-        $result = Process::timeout((int) config('kikitoons.ffmpeg.timeout'))
+        $result = Process::timeout((int) config('soundex.ffmpeg.timeout'))
             ->run($this->buildCommand($inputs, $filters, $output, $options));
 
         if (! $result->successful() || ! is_file($output) || filesize($output) === 0) {

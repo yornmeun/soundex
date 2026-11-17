@@ -44,7 +44,7 @@
                                         </p>
                                         <p class="text-xs text-slate-500">
                                             {{ ucfirst($voice->mode ?? 'voice') }} clone
-                                            @if ($voice->language) · {{ config('kikitoons.languages')[$voice->language] ?? $voice->language }} @endif
+                                            @if ($voice->language) · {{ config('soundex.languages')[$voice->language] ?? $voice->language }} @endif
                                             · ID <span class="font-mono">{{ SettingsService::mask($voice->voice_id) }}</span>
                                             @if ($voice->last_synced_at) · synced {{ $voice->last_synced_at->diffForHumans() }} @endif
                                         </p>

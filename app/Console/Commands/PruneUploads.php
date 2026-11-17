@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Storage;
 
 class PruneUploads extends Command
 {
-    protected $signature = 'kikitoons:prune-uploads';
+    protected $signature = 'soundex:prune-uploads';
 
     protected $description = 'Delete uploaded SRT files that were never used for a generation';
 
@@ -17,9 +17,9 @@ class PruneUploads extends Command
         $count = 0;
         UploadedFile::query()
             ->whereDoesntHave('generations')
-            ->where('created_at', '<', now()->subDays((int) config('kikitoons.prune_uploads_after_days')))
+            ->where('created_at', '<', now()->subDays((int) config('soundex.prune_uploads_after_days')))
             ->each(function (UploadedFile $file) use (&$count) {
-                Storage::disk(config('kikitoons.storage_disk'))->delete($file->stored_path);
+                Storage::disk(config('soundex.storage_disk'))->delete($file->stored_path);
                 $file->delete();
                 $count++;
             });

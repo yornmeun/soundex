@@ -2,6 +2,8 @@
 
 namespace App\Services\Srt;
 
+use App\Services\Text\SpeakerParser;
+
 /**
  * Groups subtitle cues into segments for Subtitle-Synchronized mode.
  * Each segment keeps the original start/end timestamps as metadata.
@@ -11,6 +13,8 @@ class SegmentBuilder
     public const STRATEGY_SUBTITLE = 'subtitle';
 
     public const STRATEGY_SENTENCE = 'sentence';
+
+    public function __construct(private readonly SpeakerParser $speakers = new SpeakerParser) {}
 
     private const SENTENCE_END = '/[.!?…\x{17D4}\x{17D5}。！？]["\'”’»)\]]*$/u';
 
@@ -33,6 +37,12 @@ class SegmentBuilder
         $group = [];
 
         foreach ($cues as $cue) {
+            // A cue that starts with a character label ("Kiki: …") always starts a new segment.
+            if ($group !== [] && $this->speakers->detect($cue->text) !== null) {
+                $segments[] = $this->makeSegment($group);
+                $group = [];
+            }
+
             $candidate = [...$group, $cue];
             if ($group !== [] && mb_strlen($this->joinText($candidate)) > $maxChars) {
                 $segments[] = $this->makeSegment($group);

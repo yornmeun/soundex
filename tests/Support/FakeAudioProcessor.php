@@ -11,6 +11,10 @@ class FakeAudioProcessor extends AudioProcessor
 
     public array $timelines = [];
 
+    public array $mixes = [];
+
+    public bool $acceptsUploads = true;
+
     public function __construct(public bool $available = true) {}
 
     public function isAvailable(): bool
@@ -35,5 +39,17 @@ class FakeAudioProcessor extends AudioProcessor
         $this->timelines[] = compact('clips', 'output', 'options');
         @mkdir(dirname($output), 0775, true);
         file_put_contents($output, 'TIMELINE');
+    }
+
+    public function mix(string $voice, ?array $music, array $sfx, string $output, float $voiceDuration, array $options = []): void
+    {
+        $this->mixes[] = compact('voice', 'music', 'sfx', 'output', 'voiceDuration', 'options');
+        @mkdir(dirname($output), 0775, true);
+        file_put_contents($output, 'MIXED');
+    }
+
+    public function isAudioFile(string $path): bool
+    {
+        return $this->acceptsUploads;
     }
 }

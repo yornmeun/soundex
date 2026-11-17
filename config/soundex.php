@@ -69,14 +69,14 @@ return [
     */
     'defaults' => [
         // Smaller than the 10k API cap so a single failed chunk is cheap to retry.
-        'chunk_max_chars' => (int) env('KIKITOONS_CHUNK_MAX_CHARS', 3000),
+        'chunk_max_chars' => (int) env('SOUNDEX_CHUNK_MAX_CHARS', 3000),
         'silence_between_ms' => 350,
         'normalize_loudness' => true,
         'trim_chunk_silence' => false,
         'mp3_bitrate' => 128000,
         'output_format' => 'mp3',
         'language' => 'en',
-        'max_upload_kb' => (int) env('KIKITOONS_MAX_UPLOAD_KB', 2048),
+        'max_upload_kb' => (int) env('SOUNDEX_MAX_UPLOAD_KB', 2048),
         'words_per_minute' => 150,
     ],
 
@@ -86,7 +86,7 @@ return [
         'timeout' => (int) env('FFMPEG_TIMEOUT', 1800),
     ],
 
-    'storage_disk' => env('KIKITOONS_DISK', 'local'),
+    'storage_disk' => env('SOUNDEX_DISK', 'local'),
 
     // Unused uploaded SRT files older than this are pruned by the scheduler.
     'prune_uploads_after_days' => 7,

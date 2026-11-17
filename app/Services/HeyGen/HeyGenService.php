@@ -80,11 +80,11 @@ class HeyGenService
      * Synthesize one piece of text. Throws HeyGenException on any failure; the
      * caller decides whether to retry using HeyGenException::isRetryable().
      *
-     * @param  array{model?:string,language?:?string,output_format?:string,mp3_bitrate?:?int,speed?:?float}  $options
+     * @param  array{model?:string,language?:?string,output_format?:string,mp3_bitrate?:?int,speed?:?float,pronunciation_dictionary?:array<string,string>,with_timestamps?:bool}  $options
      */
     public function synthesize(string $voiceId, string $text, array $options = []): TtsResult
     {
-        $maxChars = (int) config('kikitoons.heygen.max_chars_per_request');
+        $maxChars = (int) config('soundex.heygen.max_chars_per_request');
         if (mb_strlen($text) > $maxChars) {
             throw new HeyGenException("Text exceeds HeyGen's {$maxChars} character limit per request.", HeyGenException::CATEGORY_INVALID);
         }
@@ -92,7 +92,7 @@ class HeyGenService
         $payload = [
             'voice_id' => $voiceId,
             'text' => $text,
-            'model' => $options['model'] ?? config('kikitoons.heygen.default_model'),
+            'model' => $options['model'] ?? config('soundex.heygen.default_model'),
         ];
 
         if (! empty($options['language'])) {
@@ -113,11 +113,21 @@ class HeyGenService
             $payload['speed'] = round(max(0.75, min(1.25, (float) $options['speed'])), 2);
         }
 
+        // Term => IPA ("/.../"); only sent when non-empty (instant voices, Voice 1 / Turbo).
+        if (! empty($options['pronunciation_dictionary'])) {
+            $payload['pronunciation_dictionary'] = array_slice($options['pronunciation_dictionary'], 0, 100, true);
+        }
+
+        // Word timings are used to build narration-timed subtitles.
+        if (! empty($options['with_timestamps'])) {
+            $payload['with_timestamps'] = true;
+        }
+
         $this->throttle();
 
         $started = microtime(true);
         $response = $this->send(
-            fn (PendingRequest $http) => $http->timeout((int) config('kikitoons.heygen.request_timeout'))
+            fn (PendingRequest $http) => $http->timeout((int) config('soundex.heygen.request_timeout'))
                 ->post('/v3/models/audio/tts', $payload),
         );
 
@@ -131,12 +141,19 @@ class HeyGenService
         Log::info('HeyGen TTS completed', [
             'chars' => mb_strlen($text),
             'model' => $payload['model'],
+            'pronunciations' => count($payload['pronunciation_dictionary'] ?? []),
             'duration' => $response->json('data.duration'),
             'request_id' => $requestId,
             'elapsed_ms' => (int) ((microtime(true) - $started) * 1000),
         ]);
 
-        return new TtsResult($audioUrl, (float) $response->json('data.duration', 0), $requestId);
+        $words = array_values(array_map(fn ($w) => [
+            'text' => (string) ($w['text'] ?? ''),
+            'start_time' => (float) ($w['start_time'] ?? 0),
+            'end_time' => (float) ($w['end_time'] ?? 0),
+        ], array_filter((array) $response->json('data.original_words', []), 'is_array')));
+
+        return new TtsResult($audioUrl, (float) $response->json('data.duration', 0), $requestId, $words);
     }
 
     /** Download a generated audio file (pre-signed URL; no API key is sent). */
@@ -147,7 +164,7 @@ class HeyGenService
         }
 
         try {
-            $response = Http::connectTimeout((int) config('kikitoons.heygen.connect_timeout'))
+            $response = Http::connectTimeout((int) config('soundex.heygen.connect_timeout'))
                 ->timeout(300)
                 ->sink($absolutePath)
                 ->get($url);
@@ -167,7 +184,7 @@ class HeyGenService
      */
     private function throttle(): void
     {
-        $perMinute = max(1, (int) config('kikitoons.heygen.requests_per_minute'));
+        $perMinute = max(1, (int) config('soundex.heygen.requests_per_minute'));
 
         while (RateLimiter::tooManyAttempts(self::RATE_LIMIT_KEY, $perMinute)) {
             Sleep::for(max(1, RateLimiter::availableIn(self::RATE_LIMIT_KEY)))->seconds();
@@ -184,11 +201,11 @@ class HeyGenService
             throw HeyGenException::missingApiKey();
         }
 
-        $http = Http::baseUrl(rtrim((string) config('kikitoons.heygen.base_url'), '/'))
+        $http = Http::baseUrl(rtrim((string) config('soundex.heygen.base_url'), '/'))
             ->withHeaders(['X-Api-Key' => $apiKey])
             ->acceptJson()
             ->asJson()
-            ->connectTimeout((int) config('kikitoons.heygen.connect_timeout'))
+            ->connectTimeout((int) config('soundex.heygen.connect_timeout'))
             ->timeout(60);
 
         try {

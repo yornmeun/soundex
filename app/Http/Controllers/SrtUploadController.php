@@ -9,6 +9,8 @@ use App\Services\SettingsService;
 use App\Services\Srt\SegmentBuilder;
 use App\Services\Srt\SrtCue;
 use App\Services\Srt\SrtParser;
+use App\Services\Srt\SrtWriter;
+use App\Services\Srt\SubtitleAligner;
 use App\Services\Text\TextStats;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,7 +30,7 @@ class SrtUploadController extends Controller
         }
 
         $script = $parser->buildScript($document->cues);
-        $disk = config('kikitoons.storage_disk');
+        $disk = config('soundex.storage_disk');
         $path = $file->storeAs('uploads/srt', Str::uuid().'.srt', $disk);
 
         $upload = UploadedFile::query()->create([
@@ -59,6 +61,21 @@ class SrtUploadController extends Controller
         ]);
     }
 
+    /** Download a corrected SRT: the edited script mapped onto the original subtitle timings. */
+    public function export(Request $request, UploadedFile $uploadedFile, SubtitleAligner $aligner, SrtWriter $writer)
+    {
+        $this->authorize('view', $uploadedFile);
+        $script = $request->validate(['script' => ['required', 'string', 'max:500000']])['script'];
+
+        $cues = $aligner->align(array_map(fn ($c) => SrtCue::fromArray($c), $uploadedFile->cues ?? []), $script);
+        $name = Str::of($uploadedFile->original_filename)->beforeLast('.')->append('-corrected.srt')->toString();
+
+        return response($writer->write($cues), 200, [
+            'Content-Type' => 'application/x-subrip; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.addcslashes($name, '"\\').'"',
+        ]);
+    }
+
     public function segments(Request $request, UploadedFile $uploadedFile, SegmentBuilder $builder, SettingsService $settings): JsonResponse
     {
         $this->authorize('view', $uploadedFile);
@@ -70,7 +87,7 @@ class SrtUploadController extends Controller
         $rows = $builder->build(
             array_map(fn ($c) => SrtCue::fromArray($c), $uploadedFile->cues ?? []),
             $strategy,
-            min((int) $settings->get('generation.chunk_max_chars'), (int) config('kikitoons.heygen.max_chars_per_request')),
+            min((int) $settings->get('generation.chunk_max_chars'), (int) config('soundex.heygen.max_chars_per_request')),
         );
 
         return response()->json(['segments' => $rows]);

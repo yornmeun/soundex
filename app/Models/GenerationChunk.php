@@ -10,6 +10,7 @@ class GenerationChunk extends Model
 {
     protected $fillable = [
         'generation_id', 'chunk_index', 'text', 'start_ms', 'end_ms', 'subtitle_indices',
+        'speaker', 'voice_id', 'voice_name', 'voice_mode', 'words',
         'audio_path', 'duration_seconds', 'heygen_request_id', 'status', 'attempts', 'error_message',
     ];
 
@@ -18,6 +19,7 @@ class GenerationChunk extends Model
         return [
             'status' => ChunkStatus::class,
             'subtitle_indices' => 'array',
+            'words' => 'array',
             'duration_seconds' => 'float',
             'start_ms' => 'integer',
             'end_ms' => 'integer',

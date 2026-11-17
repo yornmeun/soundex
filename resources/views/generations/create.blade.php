@@ -8,6 +8,8 @@
             'uploadUrl' => route('srt.store'),
             'segmentsUrl' => route('srt.segments', ['uploadedFile' => '__ID__']),
             'storeUrl' => route('generations.store'),
+            'exportUrl' => route('srt.export', ['uploadedFile' => '__ID__']),
+            'pronunciationTerms' => $pronunciationTerms,
             'ffmpegAvailable' => $ffmpegAvailable,
         ];
     @endphp
@@ -111,14 +113,19 @@
                         <h3 class="text-base font-semibold text-slate-900">Narration script</h3>
                         <p class="text-sm text-slate-500">Review and edit before generating. Nothing is changed automatically.</p>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <span x-show="scriptModified" class="badge bg-amber-50 text-amber-700 ring-amber-200">Edited</span>
                         <button type="button" class="btn-ghost btn-sm" x-show="scriptModified" @click="resetScript()">Reset to extracted text</button>
+                        <button type="button" class="btn-secondary btn-sm" @click="exportCorrectedSrt()" title="Your edited text on the original subtitle timings">
+                            <x-icon name="subtitle" class="h-4 w-4" /> Download corrected SRT
+                        </button>
                     </div>
                 </div>
                 <label for="script" class="sr-only">Narration script</label>
                 <textarea id="script" x-model="script" rows="16" class="input mt-4 text-[15px] leading-7" spellcheck="true"></textarea>
-                <p class="hint">Blank lines mark paragraph breaks (inserted where the subtitles pause for 2+ seconds). Chunks are split at sentence boundaries.</p>
+                <p class="hint">Blank lines mark paragraph breaks (inserted where the subtitles pause for 2+ seconds). Chunks are split at sentence boundaries.
+                    To give a character its own voice, start the line with their name, e.g. <code>Kiki: Where are we going?</code>
+                    <span x-show="speakers.length" class="font-medium text-brand-700" x-text="'· ' + speakers.length + ' character(s) found — assign voices in the next step.'"></span></p>
             </div>
 
             {{-- Segments: editable per segment --}}
@@ -190,7 +197,7 @@
                         <label for="language" class="label">Language</label>
                         <select id="language" x-model="form.language" class="input">
                             <option value="auto">Auto-detect</option>
-                            @foreach (config('kikitoons.languages') as $code => $name)
+                            @foreach (config('soundex.languages') as $code => $name)
                                 <option value="{{ $code }}">{{ $name }} ({{ $code }})</option>
                             @endforeach
                         </select>
@@ -200,7 +207,7 @@
                     <div>
                         <label for="model" class="label">HeyGen model</label>
                         <select id="model" x-model="form.model" class="input">
-                            @foreach (config('kikitoons.models') as $key => $label)
+                            @foreach (config('soundex.models') as $key => $label)
                                 <option value="{{ $key }}">{{ $label }}</option>
                             @endforeach
                         </select>
@@ -211,7 +218,7 @@
                         <div>
                             <label for="format" class="label">Output format</label>
                             <select id="format" x-model="form.output_format" class="input">
-                                @foreach (config('kikitoons.output_formats') as $key => $label)
+                                @foreach (config('soundex.output_formats') as $key => $label)
                                     <option value="{{ $key }}">{{ $label }}</option>
                                 @endforeach
                             </select>
@@ -219,21 +226,23 @@
                         <div x-show="form.output_format === 'mp3'">
                             <label for="bitrate" class="label">MP3 quality</label>
                             <select id="bitrate" x-model.number="form.mp3_bitrate" class="input">
-                                @foreach (config('kikitoons.mp3_bitrates') as $b)
+                                @foreach (config('soundex.mp3_bitrates') as $b)
                                     <option value="{{ $b }}">{{ $b / 1000 }} kbps</option>
                                 @endforeach
                             </select>
                         </div>
                     </div>
 
-                    <div x-show="isProfessional" class="md:col-span-2">
+                    <div x-show="anyProfessional(selectedVoice)" class="md:col-span-2">
                         <label for="speed" class="label">Speed <span class="font-normal text-slate-500" x-text="'(' + Number(form.speed).toFixed(2) + '×)'"></span></label>
                         <input id="speed" type="range" min="0.75" max="1.25" step="0.05" x-model.number="form.speed" class="w-full accent-brand-600">
                         <p class="hint">Supported by HeyGen for professional voice clones only (0.75–1.25).</p>
                     </div>
-                    <p x-show="selectedVoice && !isProfessional" class="hint md:col-span-2">Speed control isn't offered: HeyGen ignores speed for instant voice clones.</p>
+                    <p x-show="selectedVoice && !anyProfessional(selectedVoice)" class="hint md:col-span-2">Speed control isn't offered: HeyGen ignores speed for instant voice clones.</p>
                 </div>
             </div>
+
+            @include('partials.voice-extras')
 
             <div class="card p-6">
                 <h3 class="text-base font-semibold text-slate-900">Audio processing</h3>
@@ -314,6 +323,7 @@
                     </template>
                     <div class="mt-5 flex flex-wrap gap-2">
                         <a :href="s?.download_url" class="btn-primary"><x-icon name="download" class="h-4 w-4" /> Download <span x-text="form.output_format.toUpperCase()"></span></a>
+                        <a :href="s?.voice_download_url" x-show="s?.voice_download_url" class="btn-secondary"><x-icon name="download" class="h-4 w-4" /> Voice only</a>
                         <a :href="s?.bundle_url" x-show="s?.bundle_url" class="btn-secondary"><x-icon name="download" class="h-4 w-4" /> Clips + timing report (ZIP)</a>
                         <a :href="s?.show_url" class="btn-secondary"><x-icon name="eye" class="h-4 w-4" /> View details</a>
                         <a href="{{ route('library') }}" class="btn-ghost">Open library</a>

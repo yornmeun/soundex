@@ -1,8 +1,8 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "kikitoons/voice-generator",
+    "name": "soundex/soundex",
     "type": "project",
-    "description": "Kikitoons Voice Generator - SRT subtitles to HeyGen narration",
+    "description": "Soundex - SRT subtitles to HeyGen narration",
     "keywords": [
         "laravel",
         "framework"

@@ -31,7 +31,7 @@
                 <label for="default_voice_id" class="label">Default voice ID <span class="font-normal text-slate-400">(optional)</span></label>
                 @if ($maskedVoiceId)<p class="mb-2 font-mono text-sm text-slate-600">Current: {{ $maskedVoiceId }}</p>@endif
                 <input id="default_voice_id" name="default_voice_id" autocomplete="off" class="input font-mono" placeholder="Leave blank to keep / choose in Voice Settings">
-                <p class="hint">Usually you don't need this: Voice Settings loads your voices and selects “{{ config('kikitoons.heygen.default_voice_name') }}”.</p>
+                <p class="hint">Usually you don't need this: Voice Settings loads your voices and selects “{{ config('soundex.heygen.default_voice_name') }}”.</p>
             </div>
 
             <div class="grid gap-5 sm:grid-cols-2">
@@ -39,7 +39,7 @@
                     <label for="default_language" class="label">Default language</label>
                     <select id="default_language" name="default_language" class="input">
                         <option value="auto" @selected($defaultLanguage === 'auto')>Auto-detect</option>
-                        @foreach (config('kikitoons.languages') as $code => $name)
+                        @foreach (config('soundex.languages') as $code => $name)
                             <option value="{{ $code }}" @selected($defaultLanguage === $code)>{{ $name }}</option>
                         @endforeach
                     </select>
@@ -47,7 +47,7 @@
                 <div>
                     <label for="default_output_format" class="label">Default output format</label>
                     <select id="default_output_format" name="default_output_format" class="input">
-                        @foreach (config('kikitoons.output_formats') as $key => $label)
+                        @foreach (config('soundex.output_formats') as $key => $label)
                             <option value="{{ $key }}" @selected($defaultOutputFormat === $key)>{{ $label }}</option>
                         @endforeach
                     </select>

@@ -1,4 +1,4 @@
-# Kikitoons Voice Generator
+# Soundex
 
 Turn SRT subtitle files into professional narration using your existing HeyGen voice clone **kikitoons**.
 
@@ -22,6 +22,11 @@ Long scripts are split into chunks at sentence boundaries, generated in order by
 | Audio | FFmpeg merge, configurable pause between chunks, optional silence trimming, EBU R128 loudness normalisation, MP3 (64–192 kbps) or WAV, measured final duration. Never time-stretched |
 | Modes | **Continuous narration** (default), or **Subtitle-synchronized segments**: one clip per subtitle group, original timestamps kept as metadata, a timeline preview, and a ZIP with clips + CSV/JSON timing report |
 | Library & history | Player with waveform, download, search, status filter, sort, pagination, view details, regenerate, delete, and **retry only failed chunks** |
+| Character voices | Lines starting with `Name:` or `[Name]` are detected, and you pick a voice per character. Unmapped labels are read exactly as written. Optionally don't speak the name. The stored script is never changed |
+| Pronunciation | Your term → IPA dictionary, sent as HeyGen's `pronunciation_dictionary` (only the terms found in each chunk, within HeyGen's 100-term / 100-occurrence limits). "Hear it" preview. Applies to instant clones on Voice 1 / Turbo |
+| Subtitle export | **Corrected SRT**: your edited text aligned onto the original timings (word-level diff); also downloadable from the wizard before generating. **Narration-timed SRT**: built from HeyGen's measured word timestamps, so it matches the generated audio |
+| Music & SFX | Sound Library (MP3/WAV/OGG/M4A/AAC/FLAC, content-checked with ffprobe). Background music is looped to the narration length, faded and ducked under the voice. Sound effects go at exact times ("add at current playback time"). **Re-mixing never calls HeyGen**, and the voice-only file stays downloadable |
+| Folders & batches | Project folders (filter, move, rename, delete keeps narrations). Batch generation: drop up to 50 SRTs, configure once, queue all, and follow live progress per file |
 | Security | Login required, owner-only access to every generation/download, API key encrypted at rest and shown masked, voice IDs never sent to browser JavaScript, secrets never logged |
 
 ---
@@ -49,7 +54,7 @@ sudo apt install -y mysql-server php8.5-mysql ffmpeg    # use your PHP version, 
 ## Installation
 
 ```bash
-cd kikitoons-voice-generator
+cd soundex
 composer install
 npm install
 cp .env.example .env        # skip if .env already exists
@@ -60,9 +65,9 @@ php artisan key:generate    # skip if APP_KEY is already set
 
 ```bash
 sudo mysql <<'SQL'
-CREATE DATABASE kikitoons_voice CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'kikitoons'@'localhost' IDENTIFIED BY 'choose-a-strong-password';
-GRANT ALL PRIVILEGES ON kikitoons_voice.* TO 'kikitoons'@'localhost';
+CREATE DATABASE soundex CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'soundex'@'localhost' IDENTIFIED BY 'choose-a-strong-password';
+GRANT ALL PRIVILEGES ON soundex.* TO 'soundex'@'localhost';
 FLUSH PRIVILEGES;
 SQL
 ```
@@ -73,8 +78,8 @@ Then in `.env`:
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=kikitoons_voice
-DB_USERNAME=kikitoons
+DB_DATABASE=soundex
+DB_USERNAME=soundex
 DB_PASSWORD=choose-a-strong-password
 ```
 
@@ -82,7 +87,7 @@ DB_PASSWORD=choose-a-strong-password
 
 ```bash
 php artisan migrate
-php artisan kikitoons:user you@example.com --name="Your Name"   # prompts for a password
+php artisan soundex:user you@example.com --name="Your Name"   # prompts for a password
 npm run build
 ```
 
@@ -145,6 +150,40 @@ php artisan schedule:work         # development
 
 If a chunk fails (e.g. out of credits), fix the cause and click **Retry failed chunks**. Completed chunks are reused, so no credits are spent twice.
 
+### Character voices
+
+Write each character line on its own line, starting with the name:
+
+```
+Once upon a time, Kiki met an old owl.
+Owl: Who goes there?
+Kiki: It's me, Kiki!
+```
+
+Step 3 lists the detected characters. Choose a voice for each one, or leave a name on **Not a character** (for false positives like `Note:`).
+Narrator lines use the main voice. In SRT files, a subtitle that starts with `Name:` automatically begins a new line in the script.
+
+### Pronunciation dictionary
+
+**Settings → Pronunciation**: add `Kiki` → `/ˈkiːki/` (IPA between slashes; the slashes are added for you if missing) and press **Hear it**, which makes a real, tiny HeyGen request.
+New generations take a snapshot of your active terms. **Regenerate** uses your *current* dictionary, which is how you apply a fixed pronunciation to an existing story.
+
+### Music, sound effects and re-mixing
+
+1. Upload tracks and effects in **Sound Library**.
+2. Pick background music in step 3, or later on the narration's page under **Music & sound effects**.
+3. On the narration page, play to a moment and press **Add at current playback time** to drop an effect there, then fine-tune the time (`0:12.500`) and volume.
+4. **Apply mix** re-renders in the background from the stored voice-only audio, using **no HeyGen credits**. Remove everything to get the plain narration back.
+
+### Subtitles
+
+- **Download corrected SRT** (wizard step 2, or the narration page): your edited wording on the original subtitle timings. Use it when the video keeps its original timing.
+- **Narration-timed SRT** (narration page): cues timed to the generated audio from HeyGen's word timestamps. Use it when the video follows the narration. It isn't available when "trim silence at chunk edges" is on, because trimming shifts the timing.
+
+### Batch generation
+
+**Batch Generation** → drop several `.srt` files → rename projects if needed → choose voice, folder, music, characters → **Generate**. Each file becomes a normal generation (its own retries, library entry and downloads). Batches use each file's extracted text unchanged; use **New Generation** to edit a script first.
+
 ### About subtitle-synchronized mode
 
 Subtitle timestamps don't guarantee that speech fits each time window. This app **does not** speed up or stretch audio. Instead it:
@@ -162,7 +201,7 @@ Subtitle timestamps don't guarantee that speech fits each time window. This app 
 php artisan test
 ```
 
-76 tests cover SRT parsing (multiline, Khmer, BOM/UTF-16, empty and invalid files), script extraction, chunking and ordering, HeyGen failures (402/401/429/5xx), rate-limit retries, audio merging, status updates, duplicate-job prevention, cancellation, retrying only failed chunks, upload validation and download authorization.
+The test suite covers SRT parsing (multiline, Khmer, BOM/UTF-16, empty and invalid files), script extraction, chunking and ordering, HeyGen failures (402/401/429/5xx), rate-limit retries, audio merging, status updates, duplicate-job prevention, cancellation, retrying only failed chunks, upload validation and download authorization.
 
 All HeyGen calls are mocked: `Http::preventStrayRequests()` makes any real request fail the test, so **no API quota is ever consumed**. One test runs a real FFmpeg merge and is skipped if FFmpeg is not installed.
 
@@ -179,8 +218,8 @@ All HeyGen calls are mocked: `Http::preventStrayRequests()` makes any real reque
 | `HEYGEN_REQUEST_TIMEOUT` | `300` | Seconds to wait for one synchronous TTS request |
 | `HEYGEN_REQUESTS_PER_MINUTE` | `30` | Client-side throttle (HeyGen's documented limit) |
 | `HEYGEN_MAX_ATTEMPTS` | `4` | Attempts per chunk for retryable errors |
-| `KIKITOONS_CHUNK_MAX_CHARS` | `3000` | Default chunk size (HeyGen's max is 10,000) |
-| `KIKITOONS_MAX_UPLOAD_KB` | `2048` | Default SRT size limit (editable in General Settings) |
+| `SOUNDEX_CHUNK_MAX_CHARS` | `3000` | Default chunk size (HeyGen's max is 10,000) |
+| `SOUNDEX_MAX_UPLOAD_KB` | `2048` | Default SRT size limit (editable in General Settings) |
 | `FFMPEG_BINARY` / `FFPROBE_BINARY` | `ffmpeg` / `ffprobe` | FFmpeg paths |
 | `DB_QUEUE_RETRY_AFTER` | `3700` | **Must be larger than the job timeout (3600 s)** |
 
@@ -199,7 +238,7 @@ All HeyGen calls are mocked: `Http::preventStrayRequests()` makes any real reque
 | Professional clone fails with a Turbo model | Professional clones only work with `heygen-voice-1`. |
 | Khmer narration sounds wrong | Khmer is not in HeyGen's supported TTS language list. The app uses auto-detect, but quality depends on HeyGen. |
 | Upload rejected for size | Raise **General Settings → Max SRT size** and PHP's `upload_max_filesize`/`post_max_size`. |
-| Worker killed mid-generation | `kikitoons:recover-stale` (scheduler) marks it failed after 75 min. Then use **Retry failed chunks**. |
+| Worker killed mid-generation | `soundex:recover-stale` (scheduler) marks it failed after 75 min. Then use **Retry failed chunks**. |
 | "Setting could not be decrypted" in logs | `APP_KEY` changed. Re-enter the API key. |
 
 Logs: `storage/logs/laravel.log`, or `php artisan pail`. HeyGen request IDs are logged for support; API keys and script text are not.
@@ -217,23 +256,23 @@ Logs: `storage/logs/laravel.log`, or `php artisan pail`. HeyGen request IDs are 
    # set APP_ENV=production, APP_DEBUG=false, APP_URL=https://..., DB_*, (optional) HEYGEN_API_KEY
    php artisan migrate --force
    php artisan config:cache && php artisan route:cache && php artisan view:cache
-   php artisan kikitoons:user admin@example.com
+   php artisan soundex:user admin@example.com
    ```
 3. Web root must point to `public/`. `storage/` and `bootstrap/cache/` must be writable by the web user.
-4. Queue worker via Supervisor (`/etc/supervisor/conf.d/kikitoons-worker.conf`):
+4. Queue worker via Supervisor (`/etc/supervisor/conf.d/soundex-worker.conf`):
    ```ini
-   [program:kikitoons-worker]
-   command=php /var/www/kikitoons/artisan queue:work --timeout=3600 --tries=1 --sleep=3 --max-time=86400
+   [program:soundex-worker]
+   command=php /var/www/soundex/artisan queue:work --timeout=3600 --tries=1 --sleep=3 --max-time=86400
    user=www-data
    autostart=true
    autorestart=true
    stopwaitsecs=3700
    numprocs=1
    redirect_stderr=true
-   stdout_logfile=/var/www/kikitoons/storage/logs/worker.log
+   stdout_logfile=/var/www/soundex/storage/logs/worker.log
    ```
    One worker processes one generation at a time; chunks inside a generation are always sequential. More workers can run in parallel, but all share HeyGen's 30 requests/minute limit, which the app throttles for you.
-5. Cron for the scheduler: `* * * * * cd /var/www/kikitoons && php artisan schedule:run >> /dev/null 2>&1`
+5. Cron for the scheduler: `* * * * * cd /var/www/soundex && php artisan schedule:run >> /dev/null 2>&1`
 6. After each deploy: `php artisan queue:restart`.
 7. Nginx: allow uploads (`client_max_body_size 10M;`) and long requests aren't needed, since generation runs in the queue.
 8. Back up the database **and** `storage/app/private/generations` (the audio files).
@@ -244,7 +283,7 @@ Logs: `storage/logs/laravel.log`, or `php artisan pail`. HeyGen request IDs are 
 
 ```
 app/
-  Console/Commands/      kikitoons:user, kikitoons:sync-voices, kikitoons:prune-uploads, kikitoons:recover-stale
+  Console/Commands/      soundex:user, soundex:sync-voices, soundex:prune-uploads, soundex:recover-stale
   Enums/                 GenerationStatus, GenerationStage, GenerationMode, ChunkStatus
   Events/ Listeners/ Notifications/   completion/failure → database notification (bell)
   Http/Controllers/      thin controllers (Dashboard, SrtUpload, Generation, Settings/*)
@@ -256,7 +295,11 @@ app/
     Text/                TextChunker, TextStats
     HeyGen/              HeyGenService (+ exception classification)
     Audio/AudioProcessor.php          FFmpeg / ffprobe
-    Generation/          GenerationService (create/retry/regenerate/cancel), GenerationProcessor (pipeline)
+    Generation/          GenerationService (create/retry/regenerate/cancel), GenerationProcessor (pipeline), BatchService
+    Srt/ (+)             SubtitleAligner (corrected SRT), NarrationSrtBuilder (word-timed SRT), SrtWriter
+    Text/ (+)            SpeakerParser (character lines)
+    Audio/ (+)           NarrationMixer (music + SFX), MixGeneration job
+    PronunciationService.php
     SettingsService.php, VoiceService.php
 resources/views/         Blade pages + components; resources/js wizard/status/player (Alpine)
 tests/                   Unit + Feature tests (HeyGen mocked)

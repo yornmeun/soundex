@@ -86,4 +86,40 @@ class AudioProcessorTest extends TestCase
         array_map('unlink', glob("$dir/*"));
         rmdir($dir);
     }
+
+    public function test_real_ffmpeg_mix_with_looped_ducked_music_and_sound_effects(): void
+    {
+        $audio = new AudioProcessor;
+        if (! $audio->isAvailable()) {
+            $this->markTestSkipped('FFmpeg is not installed on this machine.');
+        }
+
+        $dir = sys_get_temp_dir().'/kk-'.uniqid();
+        mkdir($dir);
+        $make = fn (string $src, string $out) => exec(sprintf('%s -hide_banner -loglevel error -f lavfi -i %s -c:a libmp3lame %s', escapeshellarg($audio->ffmpeg()), escapeshellarg($src), escapeshellarg("$dir/$out")));
+        $make('sine=frequency=300:duration=6', 'voice.mp3');
+        $make('sine=frequency=500:duration=2', 'music.mp3');   // shorter than the voice -> must loop
+        $make('anoisesrc=d=0.5:a=0.3', 'knock.mp3');
+
+        $this->assertTrue($audio->isAudioFile("$dir/knock.mp3"));
+
+        $audio->mix(
+            "$dir/voice.mp3",
+            ['path' => "$dir/music.mp3", 'volume_db' => -18, 'duck' => true, 'fade_in' => 1, 'fade_out' => 1],
+            [['path' => "$dir/knock.mp3", 'at_ms' => 2500, 'volume_db' => -3], ['path' => "$dir/knock.mp3", 'at_ms' => 5800, 'volume_db' => 0]],
+            "$dir/final.mp3",
+            $audio->probeDuration("$dir/voice.mp3"),
+        );
+
+        // The mix keeps the narration's length (music looped & cut, late effect truncated).
+        $this->assertEqualsWithDelta($audio->probeDuration("$dir/voice.mp3"), $audio->probeDuration("$dir/final.mp3"), 0.15);
+        exec(sprintf('%s -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 %s', escapeshellarg($audio->ffprobe()), escapeshellarg("$dir/final.mp3")), $out);
+        $this->assertSame('2', trim($out[0] ?? ''), 'Music mixes are rendered in stereo.');
+
+        file_put_contents("$dir/not-audio.mp3", 'hello');
+        $this->assertFalse($audio->isAudioFile("$dir/not-audio.mp3"));
+
+        array_map('unlink', glob("$dir/*"));
+        rmdir($dir);
+    }
 }

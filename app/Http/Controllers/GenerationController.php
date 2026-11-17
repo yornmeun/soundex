@@ -2,16 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\GenerationMode;
 use App\Enums\GenerationStage;
 use App\Enums\GenerationStatus;
 use App\Http\Requests\StoreGenerationRequest;
+use App\Http\Requests\UpdateMixRequest;
+use App\Jobs\MixGeneration;
+use App\Models\AudioAsset;
 use App\Models\Generation;
 use App\Models\UploadedFile;
 use App\Models\VoiceProfile;
 use App\Services\Audio\AudioProcessor;
 use App\Services\Generation\GenerationService;
 use App\Services\SettingsService;
+use App\Services\Srt\NarrationSrtBuilder;
+use App\Services\Srt\SrtCue;
+use App\Services\Srt\SrtWriter;
+use App\Services\Srt\SubtitleAligner;
 use App\Services\VoiceService;
+use App\Support\Format;
 use App\Support\WorkerHeartbeat;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -45,6 +54,10 @@ class GenerationController extends Controller
             'hasApiKey' => filled($settings->apiKey()),
             'ffmpegAvailable' => $audio->isAvailable(),
             'workerOnline' => WorkerHeartbeat::isOnline(),
+            'folders' => request()->user()->folders()->get(['id', 'name']),
+            'music' => AudioAsset::query()->ownedBy(request()->user())->where('type', AudioAsset::TYPE_MUSIC)->orderBy('name')->get(['id', 'name']),
+            'pronunciationCount' => request()->user()->pronunciationEntries()->where('is_active', true)->count(),
+            'pronunciationTerms' => request()->user()->pronunciationEntries()->where('is_active', true)->pluck('term'),
         ]);
     }
 
@@ -79,9 +92,16 @@ class GenerationController extends Controller
     public function show(Generation $generation): View
     {
         $this->authorize('view', $generation);
-        $generation->load('chunks', 'regeneratedFrom');
+        $generation->load('chunks', 'regeneratedFrom', 'folder', 'batch');
+        $assets = AudioAsset::query()->ownedBy(request()->user())->orderBy('name')->get(['id', 'name', 'type', 'duration_seconds']);
 
-        return view('generations.show', ['generation' => $generation]);
+        return view('generations.show', [
+            'generation' => $generation,
+            'folders' => request()->user()->folders()->get(['id', 'name']),
+            'musicAssets' => $assets->where('type', AudioAsset::TYPE_MUSIC)->values(),
+            'sfxAssets' => $assets->where('type', AudioAsset::TYPE_SFX)->values(),
+            'hasWordTimings' => $generation->hasWordTimings(),
+        ]);
     }
 
     public function status(Generation $generation): JsonResponse
@@ -106,8 +126,9 @@ class GenerationController extends Controller
         $filters = $this->filters($request);
 
         return view('generations.library', [
-            'generations' => $this->query($request, $filters)->paginate(12)->withQueryString(),
+            'generations' => $this->query($request, $filters)->with('folder')->paginate(12)->withQueryString(),
             'filters' => $filters,
+            'folders' => $request->user()->folders()->get(['id', 'name']),
         ]);
     }
 
@@ -172,22 +193,104 @@ class GenerationController extends Controller
         $this->authorize('view', $generation);
         abort_unless($generation->hasAudio(), 404);
 
-        $path = Storage::disk(config('kikitoons.storage_disk'))->path($generation->audio_path);
+        $path = Storage::disk(config('soundex.storage_disk'))->path($generation->audio_path);
         abort_unless(is_file($path), 404);
 
         return response()->file($path, ['Content-Type' => $generation->audioMimeType(), 'Cache-Control' => 'private, max-age=3600']);
     }
 
-    public function download(Generation $generation): StreamedResponse
+    public function download(Request $request, Generation $generation): StreamedResponse
     {
         $this->authorize('view', $generation);
         abort_unless($generation->hasAudio(), 404);
 
-        return Storage::disk(config('kikitoons.storage_disk'))->download(
-            $generation->audio_path,
-            $generation->downloadFilename(),
-            ['Content-Type' => $generation->audioMimeType()],
-        );
+        $voiceOnly = $request->boolean('voice');
+        $path = $voiceOnly ? $generation->voiceAudioPath() : $generation->audio_path;
+        abort_unless($path && Storage::disk(config('soundex.storage_disk'))->exists($path), 404);
+
+        $name = $voiceOnly
+            ? str_replace('.'.$generation->output_format, '-voice-only.'.$generation->output_format, $generation->downloadFilename())
+            : $generation->downloadFilename();
+
+        return Storage::disk(config('soundex.storage_disk'))->download($path, $name, ['Content-Type' => $generation->audioMimeType()]);
+    }
+
+    /**
+     * Subtitle export.
+     *  - type=corrected: the (edited) script mapped onto the original subtitle timings
+     *  - type=narration: timed to the generated audio from HeyGen's word timestamps
+     */
+    public function srt(Request $request, Generation $generation, SubtitleAligner $aligner, NarrationSrtBuilder $narration, SrtWriter $writer)
+    {
+        $this->authorize('view', $generation);
+        $type = $request->validate(['type' => ['required', Rule::in(['corrected', 'narration'])]])['type'];
+
+        if ($type === 'narration') {
+            abort_unless($generation->hasWordTimings(), 404, 'Narration timings are not available for this generation.');
+            $cues = $narration->build($generation);
+        } elseif ($generation->mode === GenerationMode::Segments) {
+            $cues = $generation->chunks->map(fn ($c) => ['start_ms' => (int) $c->start_ms, 'end_ms' => (int) $c->end_ms, 'text' => $c->text])->all();
+        } else {
+            $upload = $generation->uploadedFile;
+            abort_unless($upload && ! empty($upload->cues), 404, 'The original SRT for this generation is no longer available.');
+            $cues = $aligner->align(array_map(fn ($c) => SrtCue::fromArray($c), $upload->cues), $generation->script);
+        }
+
+        $filename = $generation->downloadFilename('srt');
+        $filename = str_replace('.srt', $type === 'narration' ? '-narration.srt' : '-corrected.srt', $filename);
+
+        return response($writer->write($cues), 200, [
+            'Content-Type' => 'application/x-subrip; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
+    }
+
+    /** Save music / sound-effect settings and re-mix in the background (no HeyGen credits). */
+    public function mix(UpdateMixRequest $request, Generation $generation): RedirectResponse|JsonResponse
+    {
+        $this->authorize('update', $generation);
+        if (! $generation->hasAudio()) {
+            return $this->respond('The narration must be completed before adding music or sound effects.', 'error');
+        }
+        if ($generation->isMixing()) {
+            return $this->respond('A mix is already in progress.', 'error');
+        }
+
+        $d = $request->validated();
+
+        $limitMs = (int) floor(((float) $generation->duration_seconds) * 1000);
+        foreach ($d['sfx'] ?? [] as $i => $effect) {
+            if ($limitMs > 0 && (int) $effect['at_ms'] >= $limitMs) {
+                $message = 'Sound effect #'.($i + 1).' starts after the narration ends ('.Format::duration($generation->duration_seconds).').';
+
+                return $request->expectsJson()
+                    ? response()->json(['message' => $message, 'errors' => ["sfx.{$i}.at_ms" => [$message]]], 422)
+                    : back()->with('error', $message);
+            }
+        }
+
+        $music = empty($d['music_asset_id']) ? null : [
+            'asset_id' => (int) $d['music_asset_id'],
+            'volume_db' => (float) ($d['music_volume_db'] ?? -18),
+            'duck' => (bool) ($d['music_duck'] ?? true),
+            'fade_in' => (float) ($d['music_fade_in'] ?? 2),
+            'fade_out' => (float) ($d['music_fade_out'] ?? 3),
+        ];
+        $sfx = collect($d['sfx'] ?? [])->map(fn ($e) => [
+            'asset_id' => (int) $e['asset_id'],
+            'at_ms' => (int) $e['at_ms'],
+            'volume_db' => (float) ($e['volume_db'] ?? 0),
+        ])->sortBy('at_ms')->values()->all();
+
+        $generation->update([
+            'mix_settings' => ['music' => $music, 'sfx' => $sfx],
+            'voice_audio_path' => $generation->voiceAudioPath(),
+            'mix_status' => 'pending',
+            'mix_error' => null,
+        ]);
+        MixGeneration::dispatch($generation->id);
+
+        return $this->respond($music || $sfx ? 'Mixing music and sound effects… (no HeyGen credits are used)' : 'Removing music and sound effects…');
     }
 
     public function downloadBundle(Generation $generation): StreamedResponse
@@ -195,7 +298,7 @@ class GenerationController extends Controller
         $this->authorize('view', $generation);
         abort_unless($generation->bundle_path && $generation->status === GenerationStatus::Completed, 404);
 
-        return Storage::disk(config('kikitoons.storage_disk'))->download($generation->bundle_path, $generation->downloadFilename('zip'));
+        return Storage::disk(config('soundex.storage_disk'))->download($generation->bundle_path, $generation->downloadFilename('zip'));
     }
 
     private function statusPayload(Generation $g): array
@@ -218,6 +321,9 @@ class GenerationController extends Controller
             'stream_url' => $g->hasAudio() ? route('generations.stream', $g) : null,
             'download_url' => $g->hasAudio() ? route('generations.download', $g) : null,
             'bundle_url' => $g->hasAudio() && $g->bundle_path ? route('generations.bundle', $g) : null,
+            'voice_download_url' => $g->hasAudio() && $g->hasMix() ? route('generations.download', [$g, 'voice' => 1]) : null,
+            'mix_status' => $g->mix_status,
+            'mix_error' => $g->mix_error,
             'show_url' => route('generations.show', $g),
             'chunks' => $g->chunks->map(fn ($c) => [
                 'index' => $c->chunk_index + 1,
@@ -236,9 +342,15 @@ class GenerationController extends Controller
             'q' => ['nullable', 'string', 'max:100'],
             'status' => ['nullable', Rule::enum(GenerationStatus::class)],
             'sort' => ['nullable', Rule::in(['newest', 'oldest'])],
+            'folder' => ['nullable', 'string', 'max:20'], // folder id or "none"
         ]);
 
-        return ['q' => $validated['q'] ?? null, 'status' => $validated['status'] ?? null, 'sort' => $validated['sort'] ?? 'newest'];
+        return [
+            'q' => $validated['q'] ?? null,
+            'status' => $validated['status'] ?? null,
+            'sort' => $validated['sort'] ?? 'newest',
+            'folder' => $validated['folder'] ?? null,
+        ];
     }
 
     private function query(Request $request, array $filters)
@@ -247,6 +359,7 @@ class GenerationController extends Controller
             ->ownedBy($request->user())
             ->search($filters['q'])
             ->when($filters['status'], fn ($q, $s) => $q->where('status', $s))
+            ->when($filters['folder'] ?? null, fn ($q, $f) => $f === 'none' ? $q->whereNull('folder_id') : $q->where('folder_id', (int) $f))
             ->orderBy('created_at', $filters['sort'] === 'oldest' ? 'asc' : 'desc')
             ->orderBy('id', $filters['sort'] === 'oldest' ? 'asc' : 'desc');
     }

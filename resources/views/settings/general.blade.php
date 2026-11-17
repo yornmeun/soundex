@@ -10,7 +10,7 @@
                 <div>
                     <label for="model" class="label">HeyGen model</label>
                     <select id="model" name="model" class="input">
-                        @foreach (config('kikitoons.models') as $key => $label)
+                        @foreach (config('soundex.models') as $key => $label)
                             <option value="{{ $key }}" @selected($values['generation.model'] === $key)>{{ $label }}</option>
                         @endforeach
                     </select>
@@ -18,15 +18,15 @@
                 <div>
                     <label for="mp3_bitrate" class="label">MP3 quality</label>
                     <select id="mp3_bitrate" name="mp3_bitrate" class="input">
-                        @foreach (config('kikitoons.mp3_bitrates') as $b)
+                        @foreach (config('soundex.mp3_bitrates') as $b)
                             <option value="{{ $b }}" @selected((int) $values['generation.mp3_bitrate'] === $b)>{{ $b / 1000 }} kbps</option>
                         @endforeach
                     </select>
                 </div>
                 <div>
                     <label for="chunk_max_chars" class="label">Max characters per chunk</label>
-                    <input id="chunk_max_chars" name="chunk_max_chars" type="number" min="500" max="{{ config('kikitoons.heygen.max_chars_per_request') }}" value="{{ $values['generation.chunk_max_chars'] }}" class="input">
-                    <p class="hint">HeyGen's limit is {{ number_format(config('kikitoons.heygen.max_chars_per_request')) }} per request. Smaller chunks make retries cheaper.</p>
+                    <input id="chunk_max_chars" name="chunk_max_chars" type="number" min="500" max="{{ config('soundex.heygen.max_chars_per_request') }}" value="{{ $values['generation.chunk_max_chars'] }}" class="input">
+                    <p class="hint">HeyGen's limit is {{ number_format(config('soundex.heygen.max_chars_per_request')) }} per request. Smaller chunks make retries cheaper.</p>
                 </div>
                 <div>
                     <label for="silence_between_ms" class="label">Pause between chunks (ms)</label>

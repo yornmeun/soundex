@@ -14,7 +14,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Generation extends Model
 {
     protected $fillable = [
-        'user_id', 'uploaded_file_id', 'regenerated_from_id', 'project_name', 'original_filename',
+        'user_id', 'folder_id', 'batch_id', 'uploaded_file_id', 'regenerated_from_id',
+        'speaker_voices', 'strip_speaker_labels', 'use_pronunciations', 'pronunciation_dictionary',
+        'voice_audio_path', 'mix_settings', 'mix_status', 'mix_error', 'project_name', 'original_filename',
         'script', 'mode', 'voice_id', 'voice_name', 'voice_mode', 'language', 'model', 'output_format',
         'mp3_bitrate', 'speed', 'silence_between_ms', 'normalize_loudness', 'trim_chunk_silence',
         'total_words', 'total_chunks', 'completed_chunks', 'audio_path', 'bundle_path', 'timing_report',
@@ -31,6 +33,11 @@ class Generation extends Model
             'normalize_loudness' => 'boolean',
             'trim_chunk_silence' => 'boolean',
             'timing_report' => 'array',
+            'speaker_voices' => 'array',
+            'strip_speaker_labels' => 'boolean',
+            'use_pronunciations' => 'boolean',
+            'pronunciation_dictionary' => 'array',
+            'mix_settings' => 'array',
             'duration_seconds' => 'float',
             'speed' => 'float',
             'progress' => 'integer',
@@ -43,6 +50,16 @@ class Generation extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function folder(): BelongsTo
+    {
+        return $this->belongsTo(Folder::class);
+    }
+
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(GenerationBatch::class, 'batch_id');
     }
 
     public function uploadedFile(): BelongsTo
@@ -81,6 +98,34 @@ class Generation extends Model
     public function hasAudio(): bool
     {
         return $this->status === GenerationStatus::Completed && filled($this->audio_path);
+    }
+
+    /** Narration without music/SFX (older generations only have audio_path). */
+    public function voiceAudioPath(): ?string
+    {
+        return $this->voice_audio_path ?: $this->audio_path;
+    }
+
+    public function hasMix(): bool
+    {
+        $mix = $this->mix_settings ?? [];
+
+        return ! empty($mix['music']['asset_id']) || ! empty($mix['sfx']);
+    }
+
+    public function isMixing(): bool
+    {
+        return in_array($this->mix_status, ['pending', 'processing'], true);
+    }
+
+    /** Narration-timed SRT needs HeyGen word timestamps for every chunk. */
+    public function hasWordTimings(): bool
+    {
+        if (! $this->hasAudio() || $this->trim_chunk_silence) {
+            return false;
+        }
+
+        return ! $this->chunks()->whereNull('words')->exists();
     }
 
     public function hasFailedChunks(): bool

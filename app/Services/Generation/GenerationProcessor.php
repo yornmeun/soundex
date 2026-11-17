@@ -12,9 +12,12 @@ use App\Exceptions\AudioProcessingException;
 use App\Models\Generation;
 use App\Models\GenerationChunk;
 use App\Services\Audio\AudioProcessor;
+use App\Services\Audio\NarrationMixer;
 use App\Services\HeyGen\HeyGenException;
 use App\Services\HeyGen\HeyGenService;
+use App\Services\PronunciationService;
 use App\Services\SettingsService;
+use App\Services\Text\SpeakerParser;
 use App\Services\Text\TextChunker;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Log;
@@ -37,6 +40,9 @@ class GenerationProcessor
         private readonly AudioProcessor $audio,
         private readonly TextChunker $chunker,
         private readonly SettingsService $settings,
+        private readonly SpeakerParser $speakers,
+        private readonly PronunciationService $pronunciations,
+        private readonly NarrationMixer $mixer,
     ) {}
 
     public function process(int $generationId): void
@@ -147,41 +153,77 @@ class GenerationProcessor
 
         $max = min(
             (int) $this->settings->get('generation.chunk_max_chars'),
-            (int) config('kikitoons.heygen.max_chars_per_request'),
+            (int) config('soundex.heygen.max_chars_per_request'),
         );
 
-        $pieces = $this->chunker->chunk($generation->script, max(200, $max));
-        if ($pieces === []) {
+        // Character voices: each speaker turn is chunked separately so a chunk has exactly one voice.
+        $voices = array_filter((array) $generation->speaker_voices);
+        $turns = $voices === []
+            ? [['speaker' => null, 'text' => $generation->script]]
+            : $this->speakers->turns($generation->script, $voices, $generation->strip_speaker_labels);
+
+        $index = 0;
+        foreach ($turns as $turn) {
+            $voice = $turn['speaker'] !== null ? ($voices[$turn['speaker']] ?? null) : null;
+            foreach ($this->chunker->chunk($turn['text'], max(200, $max)) as $text) {
+                $generation->chunks()->create([
+                    'chunk_index' => $index++,
+                    'text' => $text,
+                    'speaker' => $voice['label'] ?? null,
+                    'voice_id' => $voice['voice_id'] ?? null,
+                    'voice_name' => $voice['voice_name'] ?? null,
+                    'voice_mode' => $voice['voice_mode'] ?? null,
+                    'status' => ChunkStatus::Pending,
+                ]);
+            }
+        }
+
+        if ($index === 0) {
             throw new HeyGenException('The script is empty.', HeyGenException::CATEGORY_INVALID);
         }
 
-        foreach ($pieces as $i => $text) {
-            $generation->chunks()->create(['chunk_index' => $i, 'text' => $text, 'status' => ChunkStatus::Pending]);
-        }
-
-        $generation->update(['total_chunks' => count($pieces)]);
+        $generation->update(['total_chunks' => $index]);
     }
 
-    private function canFallBackToFreeModel(Generation $generation, ?string $model, HeyGenException $e): bool
+    private function canFallBackToFreeModel(?string $voiceMode, ?string $model, HeyGenException $e): bool
     {
         return $e->errorCode === 'insufficient_credit'
             && $model !== self::FREE_MODEL
-            && $generation->voice_mode === 'instant'
-            && config('kikitoons.heygen.free_model_fallback');
+            && $voiceMode === 'instant'
+            && config('soundex.heygen.free_model_fallback');
+    }
+
+    /** Request options for one chunk (its own voice, pronunciations and word timestamps). */
+    private function chunkOptions(Generation $generation, GenerationChunk $chunk, string $model): array
+    {
+        $voiceMode = $chunk->voice_mode ?? $generation->voice_mode;
+
+        $dictionary = [];
+        if ($generation->use_pronunciations && ! empty($generation->pronunciation_dictionary)
+            && $this->pronunciations->isSupported($voiceMode, $model)) {
+            $dictionary = $this->pronunciations->forText($generation->pronunciation_dictionary, $chunk->text);
+        }
+
+        return [
+            'model' => $model,
+            'language' => $generation->language,
+            'output_format' => $generation->output_format,
+            'mp3_bitrate' => $generation->mp3_bitrate,
+            // speed is only honoured by professional clones.
+            'speed' => $voiceMode === 'professional' ? $generation->speed : null,
+            'pronunciation_dictionary' => $dictionary,
+            'with_timestamps' => true,
+        ];
     }
 
     private function generateChunk(Generation $generation, GenerationChunk $chunk): void
     {
-        $maxAttempts = max(1, (int) config('kikitoons.heygen.max_attempts'));
+        $maxAttempts = max(1, (int) config('soundex.heygen.max_attempts'));
         $chunk->update(['status' => ChunkStatus::Processing, 'error_message' => null]);
 
-        $options = [
-            'model' => $generation->model,
-            'language' => $generation->language,
-            'output_format' => $generation->output_format,
-            'mp3_bitrate' => $generation->mp3_bitrate,
-            'speed' => $generation->speed,
-        ];
+        $voiceId = $chunk->voice_id ?? $generation->voice_id;
+        $voiceMode = $chunk->voice_mode ?? $generation->voice_mode;
+        $model = $generation->model;
 
         $attempt = 0;
         while (true) {
@@ -189,7 +231,8 @@ class GenerationProcessor
             $chunk->increment('attempts');
 
             try {
-                $result = $this->heygen->synthesize($generation->voice_id, $chunk->text, $options);
+                $options = $this->chunkOptions($generation, $chunk, $model);
+                $result = $this->heygen->synthesize($voiceId, $chunk->text, $options);
 
                 $relative = GenerationService::directory($generation).sprintf('/chunks/%04d.%s', $chunk->chunk_index, $generation->output_format);
                 $this->heygen->downloadAudio($result->audioUrl, $this->disk()->path($relative));
@@ -201,14 +244,15 @@ class GenerationProcessor
                     'audio_path' => $relative,
                     'duration_seconds' => $duration,
                     'heygen_request_id' => $result->requestId,
+                    'words' => $result->words ?: null,
                     'error_message' => null,
                 ]);
 
                 return;
             } catch (HeyGenException $e) {
                 // Out of paid credits: instant voices can still speak on the free model.
-                if ($this->canFallBackToFreeModel($generation, $options['model'], $e)) {
-                    $options['model'] = self::FREE_MODEL;
+                if ($this->canFallBackToFreeModel($voiceMode, $model, $e)) {
+                    $model = self::FREE_MODEL;
                     $generation->update(['model' => self::FREE_MODEL]);
                     $chunk->update(['error_message' => 'No paid HeyGen credits left; switched to the free Turbo model.']);
                     Log::notice('Falling back to free HeyGen model', ['generation' => $generation->id, 'chunk' => $chunk->chunk_index]);
@@ -242,12 +286,12 @@ class GenerationProcessor
 
     public function backoffSeconds(int $attempt, ?int $retryAfter): int
     {
-        $max = (int) config('kikitoons.heygen.backoff_max_seconds');
+        $max = (int) config('soundex.heygen.backoff_max_seconds');
         if ($retryAfter !== null && $retryAfter > 0) {
             return min($retryAfter, $max);
         }
 
-        $base = (int) config('kikitoons.heygen.backoff_base_seconds');
+        $base = (int) config('soundex.heygen.backoff_base_seconds');
 
         return (int) min($max, $base * (2 ** ($attempt - 1)) + random_int(0, max(1, $base)));
     }
@@ -265,9 +309,12 @@ class GenerationProcessor
 
         $generation->update([
             'audio_path' => $relative,
+            'voice_audio_path' => $relative,
             'duration_seconds' => $this->audio->probeDuration($disk->path($relative)),
-            'progress' => 98,
+            'progress' => 96,
         ]);
+
+        $this->mixer->apply($generation);
     }
 
     private function finishSegments(Generation $generation, $chunks): void
@@ -324,11 +371,14 @@ class GenerationProcessor
 
         $generation->update([
             'audio_path' => $timelinePath,
+            'voice_audio_path' => $timelinePath,
             'bundle_path' => $bundlePath,
             'timing_report' => $report,
             'duration_seconds' => $this->audio->probeDuration($disk->path($timelinePath)),
-            'progress' => 98,
+            'progress' => 96,
         ]);
+
+        $this->mixer->apply($generation);
     }
 
     private function audioOptions(Generation $generation): array
@@ -415,6 +465,6 @@ class GenerationProcessor
 
     private function disk(): Filesystem
     {
-        return Storage::disk(config('kikitoons.storage_disk'));
+        return Storage::disk(config('soundex.storage_disk'));
     }
 }
