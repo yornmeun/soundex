@@ -246,11 +246,11 @@ class GenerationProcessingTest extends TestCase
         $this->assertSame(1, $generation->chunks()->where('status', ChunkStatus::Completed)->count());
     }
 
-    public function test_missing_ffmpeg_fails_before_calling_heygen(): void
+    public function test_music_without_ffmpeg_fails_before_calling_heygen(): void
     {
         $this->useFakeAudio(available: false);
         Http::fake();
-        $generation = $this->makeGeneration();
+        $generation = $this->makeGeneration(attrs: ['mix_settings' => ['music' => ['asset_id' => 1], 'sfx' => []]]);
 
         $this->process($generation->id);
 

@@ -70,11 +70,11 @@
                 <h2 class="text-base font-semibold text-slate-900">System check</h2>
                 <dl class="mt-3 space-y-2 text-sm">
                     <div class="flex justify-between gap-3"><dt class="text-slate-500">API key</dt><dd class="{{ $maskedKey ? 'text-emerald-600' : 'text-rose-600' }}">{{ $maskedKey ? 'Configured' : 'Missing' }}</dd></div>
-                    <div class="flex justify-between gap-3"><dt class="text-slate-500">FFmpeg</dt><dd class="truncate {{ $ffmpegVersion ? 'text-emerald-600' : 'text-rose-600' }}" title="{{ $ffmpegVersion }}">{{ $ffmpegVersion ? 'Installed' : 'Not found' }}</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-slate-500">FFmpeg</dt><dd class="truncate {{ $ffmpegVersion ? 'text-emerald-600' : 'text-amber-600' }}" title="{{ $ffmpegVersion }}">{{ $ffmpegVersion ? 'Installed' : 'Not found (basic mode)' }}</dd></div>
                     <div class="flex justify-between gap-3"><dt class="text-slate-500">Queue worker</dt><dd class="{{ $workerOnline ? 'text-emerald-600' : 'text-rose-600' }}">{{ $workerOnline ? 'Running' : 'Not running' }}</dd></div>
                 </dl>
                 @unless ($ffmpegVersion)
-                    <p class="mt-3 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">Install FFmpeg (<code>sudo apt install ffmpeg</code>) or set <code>FFMPEG_BINARY</code>/<code>FFPROBE_BINARY</code> in .env. Audio merging needs it.</p>
+                    <p class="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-700">Running without FFmpeg: clips are joined in basic mode. Background music, sound effects and MP3 loudness normalisation need FFmpeg.</p>
                 @endunless
             </div>
         </aside>

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\GenerationStatus;
 use App\Jobs\ProcessGeneration;
+use App\Models\AudioAsset;
 use App\Models\Generation;
 use App\Models\User;
 use App\Support\WorkerHeartbeat;
@@ -61,15 +62,30 @@ class GenerationHttpTest extends TestCase
         Queue::assertPushed(ProcessGeneration::class, fn ($job) => $job->generationId === $generation->id);
     }
 
-    public function test_generation_is_refused_without_ffmpeg_so_no_credits_are_spent(): void
+    public function test_generation_works_without_ffmpeg_in_basic_mode(): void
     {
         Queue::fake();
         $this->useFakeAudio(available: false);
 
         $this->actingAs(User::factory()->create())
             ->postJson(route('generations.store'), $this->payload())
+            ->assertCreated();
+
+        $this->assertDatabaseCount('generations', 1);
+        Queue::assertPushed(ProcessGeneration::class);
+    }
+
+    public function test_background_music_is_refused_without_ffmpeg_so_no_credits_are_spent(): void
+    {
+        Queue::fake();
+        $this->useFakeAudio(available: false);
+        $user = User::factory()->create();
+        $track = $user->audioAssets()->create(['name' => 'Calm', 'type' => AudioAsset::TYPE_MUSIC, 'path' => 'sounds/calm.mp3', 'original_filename' => 'calm.mp3', 'mime_type' => 'audio/mpeg', 'size_bytes' => 10, 'duration_seconds' => 1]);
+
+        $this->actingAs($user)
+            ->postJson(route('generations.store'), $this->payload(['music_asset_id' => $track->id]))
             ->assertUnprocessable()
-            ->assertJsonPath('message', fn ($m) => str_contains($m, 'FFmpeg is not installed'));
+            ->assertJsonPath('message', fn ($m) => str_contains($m, 'needs FFmpeg'));
 
         $this->assertDatabaseCount('generations', 0);
         Queue::assertNothingPushed();

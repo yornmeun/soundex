@@ -65,10 +65,10 @@ class GenerationController extends Controller
     {
         $data = $request->validated();
 
-        if (! $audio->isAvailable()) {
-            $message = 'FFmpeg is not installed, so audio cannot be merged. Install it (sudo apt install ffmpeg) or set FFMPEG_BINARY / FFPROBE_BINARY in .env, then try again. No HeyGen credits were used.';
+        if (! empty($data['music_asset_id']) && ! $audio->canMix()) {
+            $message = 'Background music needs FFmpeg, which is not installed. Choose "No music" (the narration still works without FFmpeg), or install FFmpeg. No HeyGen credits were used.';
 
-            return response()->json(['message' => $message, 'errors' => ['ffmpeg' => [$message]]], 422);
+            return response()->json(['message' => $message, 'errors' => ['music_asset_id' => [$message]]], 422);
         }
         $voice = VoiceProfile::query()->findOrFail($data['voice_profile_id']);
 
@@ -257,6 +257,10 @@ class GenerationController extends Controller
         }
 
         $d = $request->validated();
+
+        if ((! empty($d['music_asset_id']) || ! empty($d['sfx'])) && ! app(AudioProcessor::class)->canMix()) {
+            return $this->respond('Background music and sound effects need FFmpeg, which is not installed on this computer.', 'error');
+        }
 
         $limitMs = (int) floor(((float) $generation->duration_seconds) * 1000);
         foreach ($d['sfx'] ?? [] as $i => $effect) {

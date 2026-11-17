@@ -31,10 +31,9 @@
         </nav>
 
         @if (! $ffmpegAvailable)
-            <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">
-                <strong>FFmpeg is not installed.</strong> It is needed to merge the audio, so generation is disabled until it's installed:
-                <code class="ml-1 rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-rose-200">sudo apt install ffmpeg</code>
-                (or set <code>FFMPEG_BINARY</code>/<code>FFPROBE_BINARY</code> in .env). Reload this page afterwards.
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800" role="status">
+                <strong>Basic audio mode (FFmpeg not found).</strong> Narrations still generate and clips are joined in order,
+                but background music isn't available, and MP3 audio isn't loudness-normalised or silence-trimmed.
             </div>
         @endif
         @if (! $workerOnline)

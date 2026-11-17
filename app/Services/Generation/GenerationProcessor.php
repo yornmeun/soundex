@@ -84,8 +84,8 @@ class GenerationProcessor
         if (! $this->heygen->hasApiKey()) {
             throw HeyGenException::missingApiKey();
         }
-        if (! $this->audio->isAvailable()) {
-            throw new AudioProcessingException('FFmpeg/ffprobe is not installed or not executable. Install FFmpeg (see README) and retry.');
+        if ($generation->hasMix() && ! $this->audio->canMix()) {
+            throw new AudioProcessingException('Background music and sound effects need FFmpeg, which is not installed. Remove the music, or install FFmpeg, and retry.');
         }
 
         // ---- Splitting

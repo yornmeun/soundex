@@ -42,11 +42,11 @@ class BatchController extends Controller
 
     public function store(StoreBatchRequest $request, BatchService $batches, AudioProcessor $audio): JsonResponse
     {
-        if (! $audio->isAvailable()) {
-            return response()->json(['message' => 'FFmpeg is not installed, so audio cannot be merged. No HeyGen credits were used.'], 422);
+        $data = $request->validated();
+        if (! empty($data['music_asset_id']) && ! $audio->canMix()) {
+            return response()->json(['message' => 'Background music needs FFmpeg, which is not installed. Choose "No music" (the narration still works without FFmpeg), or install FFmpeg. No HeyGen credits were used.'], 422);
         }
 
-        $data = $request->validated();
         $voice = VoiceProfile::query()->findOrFail($data['voice_profile_id']);
         if (! $voice->isActive()) {
             return response()->json(['message' => "The voice “{$voice->name}” is not active in HeyGen."], 422);

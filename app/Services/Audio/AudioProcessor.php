@@ -6,11 +6,28 @@ use App\Exceptions\AudioProcessingException;
 use Illuminate\Support\Facades\Process;
 
 /**
- * FFmpeg-based audio processing. Narration is never time-stretched or sped up.
+ * Audio processing. Uses FFmpeg when it is installed; otherwise falls back to a pure-PHP
+ * "basic mode" (see NativeAudio) that joins MP3/WAV clips but cannot mix music or effects.
+ * Narration is never time-stretched or sped up.
  */
 class AudioProcessor
 {
     private const SAMPLE_RATE = 44100;
+
+    private ?bool $ffmpegFound = null;
+
+    private ?NativeAudio $nativeAudio = null;
+
+    public function native(): NativeAudio
+    {
+        return $this->nativeAudio ??= new NativeAudio;
+    }
+
+    /** Music and sound-effect mixing needs FFmpeg. */
+    public function canMix(): bool
+    {
+        return $this->isAvailable();
+    }
 
     public function ffmpeg(): string
     {
@@ -24,24 +41,33 @@ class AudioProcessor
 
     /**
      * "ffmpeg" is looked up on PATH; "bin/ffmpeg" is relative to the project root;
-     * "/usr/bin/ffmpeg" is used as is.
+     * "/usr/bin/ffmpeg" and Windows paths like "C:/ffmpeg/bin/ffmpeg.exe" are used as is.
      */
     private function resolveBinary(string $binary): string
     {
-        if ($binary !== '' && ! str_starts_with($binary, '/') && str_contains($binary, '/')) {
+        $isAbsolute = str_starts_with($binary, '/')
+            || str_starts_with($binary, '\\')
+            || preg_match('/^[A-Za-z]:[\\\\\/]/', $binary) === 1;
+
+        if ($binary !== '' && ! $isAbsolute && (str_contains($binary, '/') || str_contains($binary, '\\'))) {
             return base_path($binary);
         }
 
         return $binary;
     }
 
+    /** True when FFmpeg and ffprobe can be run. Without them the app works in basic mode. */
     public function isAvailable(): bool
     {
+        if ($this->ffmpegFound !== null) {
+            return $this->ffmpegFound;
+        }
+
         try {
-            return Process::timeout(15)->run([$this->ffmpeg(), '-version'])->successful()
+            return $this->ffmpegFound = Process::timeout(15)->run([$this->ffmpeg(), '-version'])->successful()
                 && Process::timeout(15)->run([$this->ffprobe(), '-version'])->successful();
         } catch (\Throwable) {
-            return false;
+            return $this->ffmpegFound = false;
         }
     }
 
@@ -58,6 +84,10 @@ class AudioProcessor
 
     public function probeDuration(string $path): float
     {
+        if (! $this->isAvailable()) {
+            return $this->native()->probeDuration($path);
+        }
+
         $result = Process::timeout(60)->run([
             $this->ffprobe(), '-v', 'error', '-show_entries', 'format=duration',
             '-of', 'default=noprint_wrappers=1:nokey=1', $path,
@@ -78,6 +108,12 @@ class AudioProcessor
      */
     public function merge(array $inputs, string $output, array $options = []): void
     {
+        if (! $this->isAvailable()) {
+            $this->native()->merge($inputs, $output, $options);
+
+            return;
+        }
+
         if ($inputs === []) {
             throw new AudioProcessingException('No audio files to merge.');
         }
@@ -110,6 +146,12 @@ class AudioProcessor
      */
     public function timeline(array $clips, string $output, array $options = []): void
     {
+        if (! $this->isAvailable()) {
+            $this->native()->timeline($clips, $output, $options);
+
+            return;
+        }
+
         if ($clips === []) {
             throw new AudioProcessingException('No audio clips to place on the timeline.');
         }
@@ -139,6 +181,10 @@ class AudioProcessor
      */
     public function mix(string $voice, ?array $music, array $sfx, string $output, float $voiceDuration, array $options = []): void
     {
+        if (! $this->isAvailable()) {
+            throw new AudioProcessingException('Background music and sound effects need FFmpeg, which is not installed. Remove the music/effects, or install FFmpeg.');
+        }
+
         $cmd = $this->buildMixCommand($voice, $music, $sfx, $output, $voiceDuration, $options);
 
         foreach (array_filter([$voice, $music['path'] ?? null, ...array_column($sfx, 'path')]) as $input) {
@@ -215,6 +261,10 @@ class AudioProcessor
     /** True when ffprobe finds an audio stream in the file. */
     public function isAudioFile(string $path): bool
     {
+        if (! $this->isAvailable()) {
+            return $this->native()->isAudioFile($path);
+        }
+
         $result = Process::timeout(60)->run([
             $this->ffprobe(), '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type',
             '-of', 'default=noprint_wrappers=1:nokey=1', $path,

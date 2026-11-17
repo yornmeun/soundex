@@ -35,7 +35,7 @@ export function batchForm(config) {
         get turboWithProfessional() { return this.anyProfessional(this.selectedVoice) && this.form.model !== 'heygen-voice-1'; },
         get pronunciationSupported() { return this.form.model !== 'heygen-voice-1-turbo-free' && this.selectedVoice?.mode !== 'professional'; },
         get blockReason() {
-            if (!config.ffmpegAvailable) return 'FFmpeg is not installed, so audio cannot be merged.';
+            if (!config.ffmpegAvailable && this.musicAssetId) return 'Background music needs FFmpeg, which is not installed. Choose "No music" to continue.';
             if (!this.ready.length) return 'Add at least one SRT file.';
             if (this.uploading) return 'Wait for all files to finish uploading.';
             if (this.ready.length > 50) return 'A batch can contain at most 50 files.';

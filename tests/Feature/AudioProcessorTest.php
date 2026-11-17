@@ -21,7 +21,10 @@ class AudioProcessorTest extends TestCase
 
     public function test_merge_builds_filter_graph_without_time_stretching(): void
     {
-        Process::fake(fn () => Process::result(errorOutput: 'boom', exitCode: 1));
+        // "-version" succeeds (FFmpeg present); the real merge fails.
+        Process::fake(fn ($process) => in_array('-version', (array) $process->command, true)
+            ? Process::result('ffmpeg version test')
+            : Process::result(errorOutput: 'boom', exitCode: 1));
         $dir = sys_get_temp_dir().'/kk-'.uniqid();
         mkdir($dir);
         touch("$dir/0.mp3");

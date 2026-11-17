@@ -59,7 +59,7 @@ export function generationWizard(config) {
         },
         /** Why "Generate narration" is disabled (null = ready). Shown next to the button. */
         get blockReason() {
-            if (!config.ffmpegAvailable) return 'Generate is disabled because FFmpeg is not installed on this computer (needed to merge the audio). Run "sudo apt install ffmpeg", then reload this page.';
+            if (!config.ffmpegAvailable && this.musicAssetId) return 'Background music needs FFmpeg, which is not installed. Choose "No music" to continue.';
             if (!this.form.project_name.trim()) return 'Enter a project name to continue.';
             if (!this.selectedVoice) return 'Choose a voice to continue.';
             if (!this.selectedVoice.active) return `The voice “${this.selectedVoice.name}” is not active in HeyGen.`;
