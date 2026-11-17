@@ -1,0 +1,12 @@
+1
+00:00:01,000 --> 00:00:03,500
+Once upon a time, in a small village,
+
+2
+00:00:03,600 --> 00:00:06,000
+there lived a curious little cat named <i>Kiki</i>.
+
+3
+00:00:09,000 --> 00:00:12,250
+{\an8}Every morning, Kiki asked:
+"What will we discover today?"
