@@ -3,7 +3,7 @@
     @if (! $hasApiKey)
         <div class="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center">
             <x-icon name="warning" class="h-6 w-6 shrink-0 text-amber-600" />
-            <p class="flex-1 text-sm text-amber-800"><strong>Connect HeyGen to get started.</strong> Add your HeyGen API key, then load your voices to select <em>kikitoons</em>.</p>
+            <p class="flex-1 text-sm text-amber-800"><strong>Connect a speech provider to get started.</strong> Add your HeyGen API key (for your own cloned voices such as <em>kikitoons</em>) and/or a Microsoft Speech key (ready-made voices, including Khmer).</p>
             <a href="{{ route('settings.api') }}" class="btn-secondary btn-sm">Open API Settings</a>
         </div>
     @elseif (! $defaultVoice)

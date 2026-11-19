@@ -36,6 +36,29 @@ return [
         'free_model_fallback' => (bool) env('HEYGEN_FREE_MODEL_FALLBACK', true),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Microsoft Azure Speech (second text-to-speech provider)
+    |--------------------------------------------------------------------------
+    | Neural voices in 140+ languages, including Khmer (km-KH-SreymomNeural,
+    | km-KH-PisethNeural). Key and region come from the encrypted settings table
+    | (set in API Settings) or from .env as a fallback.
+    |   GET  https://{region}.tts.speech.microsoft.com/cognitiveservices/voices/list
+    |   POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1  (SSML in, audio out)
+    */
+    'azure' => [
+        'key' => env('AZURE_SPEECH_KEY'),
+        'region' => env('AZURE_SPEECH_REGION'),
+        // Only voices for these locales are loaded into the voice list ("*" = all ~500 voices).
+        'voice_locales' => array_filter(array_map('trim', explode(',', (string) env('AZURE_SPEECH_VOICE_LOCALES', 'km-KH,en-US,en-GB')))),
+        'connect_timeout' => (int) env('AZURE_SPEECH_CONNECT_TIMEOUT', 15),
+        'request_timeout' => (int) env('AZURE_SPEECH_REQUEST_TIMEOUT', 300),
+        // The free (F0) tier allows 20 requests per 60 seconds.
+        'requests_per_minute' => (int) env('AZURE_SPEECH_REQUESTS_PER_MINUTE', 20),
+        // One request may produce at most 10 minutes of audio; keep chunks well below that.
+        'max_chars_per_request' => 5000,
+    ],
+
     // Models documented for POST /v3/models/audio/tts.
     'models' => [
         'heygen-voice-1' => 'HeyGen Voice 1 (best quality, all voices)',

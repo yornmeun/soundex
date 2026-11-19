@@ -77,9 +77,12 @@
                     <select id="b-voice" x-model.number="form.voice_profile_id" class="input">
                         <option value="">— Choose a voice —</option>
                         <template x-for="v in voices" :key="v.id">
-                            <option :value="v.id" :disabled="!v.active" :selected="v.id === form.voice_profile_id" x-text="v.name + (v.is_default ? ' (default)' : '') + (v.mode ? ' · ' + v.mode : '')"></option>
+                            <option :value="v.id" :disabled="!v.active" :selected="v.id === form.voice_profile_id" x-text="voiceLabel(v)"></option>
                         </template>
                     </select>
+                    <p class="hint text-amber-700" x-show="containsKhmer && selectedVoice && !isMicrosoft(selectedVoice)">
+                        These SRTs contain Khmer. For natural Khmer speech choose a Microsoft Khmer voice (Sreymom or Piseth).
+                    </p>
                 </div>
                 <div>
                     <label for="b-mode" class="label">Mode</label>

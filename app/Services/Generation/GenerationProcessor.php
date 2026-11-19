@@ -13,6 +13,7 @@ use App\Models\Generation;
 use App\Models\GenerationChunk;
 use App\Services\Audio\AudioProcessor;
 use App\Services\Audio\NarrationMixer;
+use App\Services\Azure\AzureSpeechService;
 use App\Services\HeyGen\HeyGenException;
 use App\Services\HeyGen\HeyGenService;
 use App\Services\PronunciationService;
@@ -43,6 +44,7 @@ class GenerationProcessor
         private readonly SpeakerParser $speakers,
         private readonly PronunciationService $pronunciations,
         private readonly NarrationMixer $mixer,
+        private readonly AzureSpeechService $azure,
     ) {}
 
     public function process(int $generationId): void
@@ -81,8 +83,14 @@ class GenerationProcessor
     private function run(Generation $generation): void
     {
         // ---- Preparing: fail fast before spending any HeyGen credits.
-        if (! $this->heygen->hasApiKey()) {
+        $modes = collect((array) $generation->speaker_voices)->pluck('voice_mode')->push($generation->voice_mode);
+        $usesAzure = $modes->contains(AzureSpeechService::MODE);
+        $usesHeygen = $modes->contains(fn ($mode) => $mode !== AzureSpeechService::MODE);
+        if ($usesHeygen && ! $this->heygen->hasApiKey()) {
             throw HeyGenException::missingApiKey();
+        }
+        if ($usesAzure && ! $this->azure->isConfigured()) {
+            throw new HeyGenException('Microsoft Speech is not configured. Add the key and region in API Settings.', HeyGenException::CATEGORY_CONFIG);
         }
         if ($generation->hasMix() && ! $this->audio->canMix()) {
             throw new AudioProcessingException('Background music and sound effects need FFmpeg, which is not installed. Remove the music, or install FFmpeg, and retry.');
@@ -154,6 +162,7 @@ class GenerationProcessor
         $max = min(
             (int) $this->settings->get('generation.chunk_max_chars'),
             (int) config('soundex.heygen.max_chars_per_request'),
+            (int) config('soundex.azure.max_chars_per_request'),
         );
 
         // Character voices: each speaker turn is chunked separately so a chunk has exactly one voice.
@@ -209,8 +218,8 @@ class GenerationProcessor
             'language' => $generation->language,
             'output_format' => $generation->output_format,
             'mp3_bitrate' => $generation->mp3_bitrate,
-            // speed is only honoured by professional clones.
-            'speed' => $voiceMode === 'professional' ? $generation->speed : null,
+            // speed is honoured by HeyGen professional clones and by Microsoft voices.
+            'speed' => in_array($voiceMode, ['professional', AzureSpeechService::MODE], true) ? $generation->speed : null,
             'pronunciation_dictionary' => $dictionary,
             'with_timestamps' => true,
         ];
@@ -232,10 +241,14 @@ class GenerationProcessor
 
             try {
                 $options = $this->chunkOptions($generation, $chunk, $model);
-                $result = $this->heygen->synthesize($voiceId, $chunk->text, $options);
-
                 $relative = GenerationService::directory($generation).sprintf('/chunks/%04d.%s', $chunk->chunk_index, $generation->output_format);
-                $this->heygen->downloadAudio($result->audioUrl, $this->disk()->path($relative));
+
+                if ($voiceMode === AzureSpeechService::MODE) {
+                    $result = $this->azure->synthesizeTo($voiceId, $chunk->text, $this->disk()->path($relative), $options);
+                } else {
+                    $result = $this->heygen->synthesize($voiceId, $chunk->text, $options);
+                    $this->heygen->downloadAudio($result->audioUrl, $this->disk()->path($relative));
+                }
 
                 $duration = $this->safeDuration($this->disk()->path($relative), $result->durationSeconds);
 

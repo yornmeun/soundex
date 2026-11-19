@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Azure\AzureSpeechService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -35,5 +36,26 @@ class VoiceProfile extends Model
     public function isProfessional(): bool
     {
         return $this->mode === 'professional';
+    }
+
+    /** Microsoft Azure Speech voice (voice_id is its short name, e.g. km-KH-SreymomNeural). */
+    public function isAzure(): bool
+    {
+        return $this->mode === AzureSpeechService::MODE;
+    }
+
+    public function providerName(): string
+    {
+        return $this->isAzure() ? 'Microsoft' : 'HeyGen';
+    }
+
+    public function scopeHeygen(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $q) => $q->whereNull('mode')->orWhere('mode', '!=', AzureSpeechService::MODE));
+    }
+
+    public function scopeAzure(Builder $query): Builder
+    {
+        return $query->where('mode', AzureSpeechService::MODE);
     }
 }

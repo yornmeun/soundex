@@ -64,6 +64,21 @@ export function voiceExtras(config) {
         anyProfessional(baseVoice) {
             return [baseVoice, ...this.mappedVoices()].some((v) => v && v.mode === 'professional');
         },
+        /** Speed works for HeyGen professional clones and for Microsoft voices. */
+        speedSupported(baseVoice) {
+            return [baseVoice, ...this.mappedVoices()].some((v) => v && (v.mode === 'professional' || v.provider === 'azure'));
+        },
+        isMicrosoft(v) {
+            return !!v && v.provider === 'azure';
+        },
+        voiceLabel(v, withDefault = true) {
+            const kind = v.provider === 'azure' ? ' · Microsoft' : (v.mode ? ' · HeyGen ' + v.mode : '');
+            return v.name + (withDefault && v.is_default ? ' (default)' : '') + kind + (!v.active ? ' · ' + v.status : '');
+        },
+        /** First Microsoft Khmer voice, for Khmer scripts. */
+        khmerVoice() {
+            return this.voices.find((v) => v.active && v.provider === 'azure' && /^km/i.test(v.language || '')) || null;
+        },
         matchingTerms(text) {
             return this.pronunciationTerms.filter((t) => termAppears(t, text));
         },

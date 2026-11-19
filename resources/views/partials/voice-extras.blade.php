@@ -21,7 +21,7 @@
                 <select :id="'sp-' + sp.key" x-model="speakerMap[sp.key]" class="input sm:w-72">
                     <option value="">Not a character — read as written</option>
                     <template x-for="v in voices.filter(v => v.active)" :key="v.id">
-                        <option :value="v.id" x-text="v.name + (v.mode ? ' · ' + v.mode : '')" :selected="Number(speakerMap[sp.key]) === v.id"></option>
+                        <option :value="v.id" x-text="voiceLabel(v, false)" :selected="Number(speakerMap[sp.key]) === v.id"></option>
                     </template>
                 </select>
             </li>

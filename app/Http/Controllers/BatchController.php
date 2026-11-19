@@ -30,7 +30,7 @@ class BatchController extends Controller
     {
         return view('batches.create', [
             'voices' => VoiceProfile::query()->where('is_available', true)->orderByDesc('is_default')->orderBy('name')->get()
-                ->map(fn (VoiceProfile $v) => ['id' => $v->id, 'name' => $v->name, 'mode' => $v->mode, 'active' => $v->isActive(), 'status' => $v->status, 'is_default' => $v->is_default])->values(),
+                ->map(fn (VoiceProfile $v) => ['id' => $v->id, 'name' => $v->name, 'mode' => $v->mode, 'provider' => $v->isAzure() ? 'azure' : 'heygen', 'language' => $v->language, 'active' => $v->isActive(), 'status' => $v->status, 'is_default' => $v->is_default])->values(),
             'defaults' => $settings->generationDefaults(),
             'defaultVoice' => $voices->defaultVoice(),
             'folders' => $request->user()->folders()->get(['id', 'name']),

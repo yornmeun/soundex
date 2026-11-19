@@ -17,6 +17,10 @@ class SettingsService
 
     public const DEFAULT_VOICE_ID = 'voice.default_voice_id';
 
+    public const AZURE_KEY = 'azure.key';
+
+    public const AZURE_REGION = 'azure.region';
+
     /** Keys editable in General / API settings, with their config defaults. */
     public function defaults(): array
     {
@@ -105,6 +109,51 @@ class SettingsService
     public function setApiKey(?string $key): void
     {
         $this->set(self::API_KEY, filled($key) ? trim($key) : null, encrypt: true);
+    }
+
+    public function azureKey(): ?string
+    {
+        $stored = $this->get(self::AZURE_KEY);
+
+        return filled($stored) ? (string) $stored : (config('soundex.azure.key') ?: null);
+    }
+
+    public function azureKeySource(): ?string
+    {
+        if (filled($this->get(self::AZURE_KEY))) {
+            return 'database';
+        }
+
+        return filled(config('soundex.azure.key')) ? 'env' : null;
+    }
+
+    public function setAzureKey(?string $key): void
+    {
+        $this->set(self::AZURE_KEY, filled($key) ? trim($key) : null, encrypt: true);
+    }
+
+    /** Azure region such as "southeastasia" (lower-case, no spaces). */
+    public function azureRegion(): ?string
+    {
+        $region = $this->get(self::AZURE_REGION) ?: config('soundex.azure.region');
+
+        return filled($region) ? strtolower(str_replace(' ', '', (string) $region)) : null;
+    }
+
+    public function setAzureRegion(?string $region): void
+    {
+        $this->set(self::AZURE_REGION, filled($region) ? strtolower(str_replace(' ', '', trim($region))) : null);
+    }
+
+    public function hasAzure(): bool
+    {
+        return filled($this->azureKey()) && filled($this->azureRegion());
+    }
+
+    /** True when at least one speech provider can be used. */
+    public function hasAnyProvider(): bool
+    {
+        return filled($this->apiKey()) || $this->hasAzure();
     }
 
     public function defaultVoiceId(): ?string

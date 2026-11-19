@@ -121,7 +121,12 @@ export function generationWizard(config) {
                 this.originalScript = this.upload.script;
                 this.form.project_name = this.upload.filename.replace(/\.srt$/i, '');
                 this.segments = [];
-                if (this.upload.contains_khmer) this.form.language = 'auto';
+                if (this.upload.contains_khmer) {
+                    this.form.language = 'auto';
+                    // HeyGen voices can't speak Khmer reliably: switch to a Microsoft Khmer voice if one is loaded.
+                    const km = this.khmerVoice();
+                    if (km && !this.isMicrosoft(this.selectedVoice)) this.form.voice_profile_id = km.id;
+                }
                 this.step = 2;
             } catch (e) {
                 this.uploadError = e.message;
@@ -172,7 +177,7 @@ export function generationWizard(config) {
                     script: this.mode === 'continuous' ? this.script : null,
                     segment_strategy: this.mode === 'segments' ? this.segmentStrategy : null,
                     segment_texts: this.mode === 'segments' ? this.segments.map((s) => s.text) : null,
-                    speed: this.anyProfessional(this.selectedVoice) ? this.form.speed : null,
+                    speed: this.speedSupported(this.selectedVoice) ? this.form.speed : null,
                     mp3_bitrate: this.form.output_format === 'mp3' ? this.form.mp3_bitrate : null,
                     ...this.extrasPayload(this.speakers),
                 };

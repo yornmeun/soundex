@@ -26,7 +26,8 @@ class PronunciationService
 
     public function isSupported(?string $voiceMode, string $model): bool
     {
-        return $voiceMode !== 'professional'
+        // Professional clones and Microsoft voices don't accept HeyGen's pronunciation dictionary.
+        return ! in_array($voiceMode, ['professional', 'azure'], true)
             && in_array($model, ['heygen-voice-1', 'heygen-voice-1-turbo'], true);
     }
 

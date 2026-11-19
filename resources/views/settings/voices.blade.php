@@ -1,5 +1,9 @@
 @use('App\Services\SettingsService')
 <x-layouts.app title="Voice Settings">
+    @php
+        $heygenVoices = $voices->reject(fn ($v) => $v->isAzure());
+        $microsoftVoices = $voices->filter(fn ($v) => $v->isAzure());
+    @endphp
     <div class="grid gap-6 lg:grid-cols-3">
         <div class="space-y-6 lg:col-span-2">
             <div class="card overflow-hidden">
@@ -20,50 +24,43 @@
                     <x-empty-state icon="key" title="Connect HeyGen first" message="Add your HeyGen API key to load your voices.">
                         <a href="{{ route('settings.api') }}" class="btn-primary">API Settings</a>
                     </x-empty-state>
-                @elseif ($voices->isEmpty())
+                @elseif ($heygenVoices->isEmpty())
                     <x-empty-state icon="mic" title="No voices loaded" message="Click “Refresh voice list” to load the voices from your HeyGen workspace, including {{ $targetName }}." />
                 @else
                     <ul class="divide-y divide-slate-100">
-                        @foreach ($voices as $voice)
-                            <li class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center" x-data="{ playing: false }">
-                                <div class="flex min-w-0 flex-1 items-center gap-3">
-                                    <div @class(['flex h-10 w-10 shrink-0 items-center justify-center rounded-full', 'bg-brand-100 text-brand-700' => $voice->is_default, 'bg-slate-100 text-slate-500' => ! $voice->is_default])>
-                                        <x-icon name="mic" class="h-5 w-5" />
-                                    </div>
-                                    <div class="min-w-0">
-                                        <p class="flex flex-wrap items-center gap-2 font-medium text-slate-900">
-                                            {{ $voice->name }}
-                                            @if ($voice->is_default)<span class="badge bg-brand-50 text-brand-700 ring-brand-200">Default</span>@endif
-                                            @if ($voice->isActive())
-                                                <span class="badge bg-emerald-50 text-emerald-700 ring-emerald-200">Active</span>
-                                            @elseif (! $voice->is_available)
-                                                <span class="badge bg-slate-100 text-slate-600 ring-slate-200">Not found in HeyGen</span>
-                                            @else
-                                                <span class="badge bg-amber-50 text-amber-700 ring-amber-200">{{ $voice->status }}</span>
-                                            @endif
-                                        </p>
-                                        <p class="text-xs text-slate-500">
-                                            {{ ucfirst($voice->mode ?? 'voice') }} clone
-                                            @if ($voice->language) · {{ config('soundex.languages')[$voice->language] ?? $voice->language }} @endif
-                                            · ID <span class="font-mono">{{ SettingsService::mask($voice->voice_id) }}</span>
-                                            @if ($voice->last_synced_at) · synced {{ $voice->last_synced_at->diffForHumans() }} @endif
-                                        </p>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    @if ($voice->isActive())
-                                        <audio x-ref="p" preload="none" src="{{ route('settings.voices.preview', $voice) }}" @play="playing = true" @pause="playing = false" @ended="playing = false" x-on:error="playing = false; $store.toasts.push('No preview available for this voice.', 'warning')"></audio>
-                                        <button type="button" class="btn-secondary btn-sm" @click="$refs.p.paused ? $refs.p.play() : $refs.p.pause()">
-                                            <x-icon name="play" class="h-4 w-4" x-show="!playing" /><x-icon name="pause" class="h-4 w-4" x-show="playing" x-cloak /> Preview
-                                        </button>
-                                        @unless ($voice->is_default)
-                                            <form method="POST" action="{{ route('settings.voices.default', $voice) }}">@csrf<button class="btn-secondary btn-sm">Set as default</button></form>
-                                        @endunless
-                                    @endif
-                                </div>
-                            </li>
+                        @foreach ($heygenVoices as $voice)
+                            @include('settings.partials.voice-row', ['voice' => $voice])
                         @endforeach
                     </ul>
+                @endif
+            </div>
+            <div class="card overflow-hidden">
+                <div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-base font-semibold text-slate-900">Microsoft voices</h2>
+                        <p class="text-sm text-slate-500">Ready-made neural voices from Azure Speech, including Khmer (Sreymom, Piseth). Languages: {{ implode(', ', $azureLocales) }}.</p>
+                    </div>
+                    <form method="POST" action="{{ route('settings.voices.refresh-azure') }}" x-data="{ busy: false }" @submit="busy = true">
+                        @csrf
+                        <button class="btn-primary btn-sm" :disabled="busy" @disabled(! $hasAzure)>
+                            <x-icon name="refresh" class="h-4 w-4" x-bind:class="busy && 'animate-spin'" /> <span x-text="busy ? 'Loading…' : 'Load Microsoft voices'">Load Microsoft voices</span>
+                        </button>
+                    </form>
+                </div>
+
+                @if (! $hasAzure)
+                    <x-empty-state icon="key" title="Connect Microsoft Speech" message="Add your Azure Speech key and region to use Microsoft voices, including Khmer.">
+                        <a href="{{ route('settings.api') }}" class="btn-primary">API Settings</a>
+                    </x-empty-state>
+                @elseif ($microsoftVoices->isEmpty())
+                    <x-empty-state icon="mic" title="No Microsoft voices loaded" message="Click “Load Microsoft voices”." />
+                @else
+                    <ul class="divide-y divide-slate-100">
+                        @foreach ($microsoftVoices as $voice)
+                            @include('settings.partials.voice-row', ['voice' => $voice])
+                        @endforeach
+                    </ul>
+                    <p class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">The first preview of each voice is a short real request (a few characters of your Azure allowance); after that it's cached.</p>
                 @endif
             </div>
         </div>

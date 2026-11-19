@@ -118,7 +118,7 @@ class GenerationService
                 'model' => $data['model'],
                 'output_format' => $data['output_format'],
                 'mp3_bitrate' => $data['output_format'] === 'mp3' ? (int) $data['mp3_bitrate'] : null,
-                'speed' => $voice->isProfessional() && isset($data['speed']) ? (float) $data['speed'] : null,
+                'speed' => ($voice->isProfessional() || $voice->isAzure()) && isset($data['speed']) ? (float) $data['speed'] : null,
                 'silence_between_ms' => (int) ($data['silence_between_ms'] ?? 0),
                 'normalize_loudness' => (bool) ($data['normalize_loudness'] ?? false),
                 'trim_chunk_silence' => (bool) ($data['trim_chunk_silence'] ?? false),

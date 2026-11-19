@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\VoiceProfile;
+use App\Services\Azure\AzureSpeechService;
 use App\Services\HeyGen\HeyGenService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,7 @@ class VoiceService
     public function __construct(
         private readonly HeyGenService $heygen,
         private readonly SettingsService $settings,
+        private readonly AzureSpeechService $azure,
     ) {}
 
     /**
@@ -36,7 +38,7 @@ class VoiceService
                 $this->upsert($voice, $now);
             }
 
-            VoiceProfile::query()->whereNotIn('voice_id', $seen)->update(['is_available' => false]);
+            VoiceProfile::query()->heygen()->whereNotIn('voice_id', $seen)->update(['is_available' => false]);
         });
 
         $autoSelected = false;
@@ -58,6 +60,41 @@ class VoiceService
             'default_voice_name' => $default?->name,
             'auto_selected' => $autoSelected,
             'default_missing' => filled($this->settings->defaultVoiceId()) && (! $default || ! $default->isActive()),
+        ];
+    }
+
+    /**
+     * Load Microsoft Azure neural voices for the configured locales (Khmer, English, ...).
+     *
+     * @return array{total:int,locales:list<string>}
+     */
+    public function syncAzure(): array
+    {
+        $remote = $this->azure->listVoices();
+        $now = now();
+
+        DB::transaction(function () use ($remote, $now) {
+            $seen = [];
+            foreach ($remote as $voice) {
+                $seen[] = $voice['voice_id'];
+                VoiceProfile::query()->updateOrCreate(['voice_id' => $voice['voice_id']], [
+                    'name' => $voice['name'],
+                    'mode' => AzureSpeechService::MODE,
+                    'language' => $voice['language'],
+                    'gender' => $voice['gender'],
+                    'status' => 'ACTIVE',
+                    'failure_reason' => null,
+                    'is_available' => true,
+                    'last_synced_at' => $now,
+                ]);
+            }
+
+            VoiceProfile::query()->azure()->whereNotIn('voice_id', $seen)->update(['is_available' => false]);
+        });
+
+        return [
+            'total' => count($remote),
+            'locales' => array_values(array_unique(array_column($remote, 'language'))),
         ];
     }
 

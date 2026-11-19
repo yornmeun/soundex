@@ -25,7 +25,7 @@ class DashboardController extends Controller
         return view('dashboard', [
             'stats' => $stats,
             'recent' => (clone $base)->latest()->limit(8)->get(),
-            'hasApiKey' => filled($settings->apiKey()),
+            'hasApiKey' => $settings->hasAnyProvider(),
             'defaultVoice' => $voices->defaultVoice(),
         ]);
     }

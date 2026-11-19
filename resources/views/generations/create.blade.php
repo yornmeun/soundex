@@ -46,7 +46,7 @@
 
         @if (! $hasApiKey)
             <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                <strong>HeyGen is not connected.</strong> You can upload and review a script, but generation needs an API key — <a class="font-medium underline" href="{{ route('settings.api') }}">add it in API Settings</a>.
+                <strong>No speech provider is connected.</strong> You can upload and review a script, but generation needs a HeyGen API key or a Microsoft Speech key — <a class="font-medium underline" href="{{ route('settings.api') }}">add one in API Settings</a>.
             </div>
         @endif
 
@@ -170,7 +170,7 @@
 
                 @if ($voices->isEmpty())
                     <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                        No voices loaded yet. <a href="{{ route('settings.voices') }}" class="font-medium underline">Load your HeyGen voices</a> to select <em>kikitoons</em>.
+                        No voices loaded yet. <a href="{{ route('settings.voices') }}" class="font-medium underline">Load your voices</a>: your HeyGen clones (e.g. <em>kikitoons</em>) and/or Microsoft voices (including Khmer).
                     </div>
                 @endif
 
@@ -186,10 +186,13 @@
                             <option value="">— Choose a voice —</option>
                             <template x-for="v in voices" :key="v.id">
                                 <option :value="v.id" :disabled="!v.active" :selected="v.id === form.voice_profile_id"
-                                        x-text="v.name + (v.is_default ? ' (default)' : '') + (v.mode ? ' · ' + v.mode : '') + (!v.active ? ' · ' + v.status : '')"></option>
+                                        x-text="voiceLabel(v)"></option>
                             </template>
                         </select>
-                        <p class="hint">Voices come from your HeyGen workspace. New voices are never created automatically.</p>
+                        <p class="hint">HeyGen voices are your own clones; Microsoft voices are ready-made (load them in <a href="{{ route('settings.voices') }}" class="underline">Voice Settings</a>).</p>
+                        <p class="hint text-amber-700" x-show="containsKhmer && selectedVoice && !isMicrosoft(selectedVoice)">
+                            This script is Khmer. HeyGen doesn't officially support Khmer — for natural Khmer speech choose a Microsoft Khmer voice (Sreymom or Piseth).
+                        </p>
                     </div>
 
                     <div>
@@ -200,7 +203,8 @@
                                 <option value="{{ $code }}">{{ $name }} ({{ $code }})</option>
                             @endforeach
                         </select>
-                        <p class="hint" x-show="containsKhmer">Khmer isn't in HeyGen's supported language list; auto-detect is used and results may vary.</p>
+                        <p class="hint" x-show="isMicrosoft(selectedVoice)">Microsoft voices always speak their own language (shown in the voice name).</p>
+                        <p class="hint" x-show="containsKhmer && !isMicrosoft(selectedVoice)">Khmer isn't in HeyGen's supported language list; auto-detect is used and results may vary.</p>
                     </div>
 
                     <div>
@@ -211,6 +215,7 @@
                             @endforeach
                         </select>
                         <p class="hint text-rose-600" x-show="turboWithProfessional">Professional voice clones only work with "HeyGen Voice 1".</p>
+                        <p class="hint" x-show="isMicrosoft(selectedVoice)">Not used for Microsoft voices.</p>
                     </div>
 
                     <div class="grid grid-cols-2 gap-3">
@@ -232,12 +237,12 @@
                         </div>
                     </div>
 
-                    <div x-show="anyProfessional(selectedVoice)" class="md:col-span-2">
+                    <div x-show="speedSupported(selectedVoice)" class="md:col-span-2">
                         <label for="speed" class="label">Speed <span class="font-normal text-slate-500" x-text="'(' + Number(form.speed).toFixed(2) + '×)'"></span></label>
                         <input id="speed" type="range" min="0.75" max="1.25" step="0.05" x-model.number="form.speed" class="w-full accent-brand-600">
-                        <p class="hint">Supported by HeyGen for professional voice clones only (0.75–1.25).</p>
+                        <p class="hint">Works with Microsoft voices and HeyGen professional voice clones (0.75–1.25). The audio is never time-stretched afterwards.</p>
                     </div>
-                    <p x-show="selectedVoice && !anyProfessional(selectedVoice)" class="hint md:col-span-2">Speed control isn't offered: HeyGen ignores speed for instant voice clones.</p>
+                    <p x-show="selectedVoice && !speedSupported(selectedVoice)" class="hint md:col-span-2">Speed control isn't offered: HeyGen ignores speed for instant voice clones.</p>
                 </div>
             </div>
 

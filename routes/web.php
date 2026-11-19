@@ -79,6 +79,7 @@ Route::middleware('auth')->group(function () {
     // Settings
     Route::get('/settings/voices', [VoiceSettingsController::class, 'index'])->name('settings.voices');
     Route::post('/settings/voices/refresh', [VoiceSettingsController::class, 'refresh'])->middleware('throttle:10,1')->name('settings.voices.refresh');
+    Route::post('/settings/voices/refresh-azure', [VoiceSettingsController::class, 'refreshAzure'])->middleware('throttle:10,1')->name('settings.voices.refresh-azure');
     Route::post('/settings/voices/add', [VoiceSettingsController::class, 'add'])->name('settings.voices.add');
     Route::post('/settings/voices/{voice}/default', [VoiceSettingsController::class, 'setDefault'])->name('settings.voices.default');
     Route::get('/settings/voices/{voice}/preview', [VoiceSettingsController::class, 'preview'])->name('settings.voices.preview');
@@ -86,6 +87,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/api', [ApiSettingsController::class, 'edit'])->name('settings.api');
     Route::put('/settings/api', [ApiSettingsController::class, 'update'])->name('settings.api.update');
     Route::post('/settings/api/test', [ApiSettingsController::class, 'test'])->middleware('throttle:10,1')->name('settings.api.test');
+    Route::post('/settings/api/test-azure', [ApiSettingsController::class, 'testAzure'])->middleware('throttle:10,1')->name('settings.api.test-azure');
 
     Route::get('/settings/general', [GeneralSettingsController::class, 'edit'])->name('settings.general');
     Route::put('/settings/general', [GeneralSettingsController::class, 'update'])->name('settings.general.update');
